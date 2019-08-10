@@ -137,6 +137,9 @@ boolean padTable[MAXPADTABLES][32] = {
     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
 
+uint8_t morphTable[2][MAXINSTRUMENTS] = {{1, 1, 5, 0, 0, 0}, {3, 3, 3, 0, 0, 0}};
+//uint8_t morphStatus[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0}; //poit all to actual tables
+
 void ISRtriggerIn()
 {
   //playSteps = !playSteps;
@@ -146,6 +149,10 @@ void setup()
 {
   triggerIn.attachCallOnRising(ISRtriggerIn);
   MIDI.begin();
+
+  INSTR1patternPointer.setValue(morphTable[0][0]);
+  INSTR2patternPointer.setValue(morphTable[0][1]);
+  INSTR3patternPointer.setValue(morphTable[0][2]);
 
   // Serial.begin(9600);
 
@@ -237,6 +244,10 @@ void readEncoder()
   }
 }
 
+Counter morphingInstrument(5);
+
+int8_t lastChange = 0;
+
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
 {
   switch (_encoder)
@@ -247,6 +258,53 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
 
   case MORPHENCODER:
     MIDI.sendNoteOn(MORPHMIDINOTE, _newValue, MIDICHANNEL);
+
+    //if any positive change , change next instrument if available
+    if (_change == 1)
+    {
+      //if all instruments already morphed
+      if (morphingInstrument.getValue() == (MAXINSTRUMENTS - 1))
+      {
+        //TODO: switch old instruments to new instruments and lock morpning
+        lastChange = _change;
+        break;
+      }
+      //if positive first change , force point the initial position
+      if ((_change == 1) && (lastChange == 0))
+        morphingInstrument.setValue(0); //point to first instrument
+      else
+        morphingInstrument.advance(); //point to next available instrument
+
+      uint8_t thisInstrument = morphingInstrument.getValue();
+      // //point this instrumento to the new morphed
+      // morphStatus[thisInstrument] = 1;
+      //set this instrument with the new instrument value or come back to old one
+      INSTRpatternPointer[thisInstrument] = morphTable[1][thisInstrument];
+      lastChange = _change;
+    }
+    //if negative
+    else if (_change == -1)
+    {
+      //if negative first change , do nothing --- OK!!!
+      if ((_change == -1) && (lastChange == 0))
+      {
+        lastChange = _change;
+        break;
+      }
+      //if all instruments where already morphed back to its original value, do nothing
+      if (morphingInstrument.getValue() == 0)
+      {
+        lastChange = _change;
+        break;
+      }
+      //point to previous available instrument
+      uint8_t thisInstrument = morphingInstrument.goback();
+      // //point to new table instrumento or come back to old one
+      // morphStatus[thisInstrument] = 0;
+      //set this instrument with the new instrument value or come back to old one
+      INSTRpatternPointer[thisInstrument] = morphTable[0][thisInstrument];
+      lastChange = _change;
+    }
     break;
   default:
     if (!encoderButtons[_encoder]->active()) //change instrument
