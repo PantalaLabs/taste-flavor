@@ -372,17 +372,14 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
         lastChange = _change;
         break;
       }
-      //if it was the first instrument and not morphed
-      if ((morphingInstrument.getValue() == 0) && (morphStatus[morphingInstrument.getValue()] == 0))
-        morphedInstruments++; //do nothing, just morph and update bargraph
-      else if (
-          ((morphingInstrument.getValue() == 0) && (morphStatus[morphingInstrument.getValue()] == 1)) || //
-          ((morphingInstrument.getValue() > 0) && morphingInstrument.getValue() < (MAXINSTRUMENTS - 1))  //
+      //if this instrument was already morphed and next instrument is allowed
+      if ((morphStatus[morphingInstrument.getValue()] == 1) &&   //
+          (morphingInstrument.getValue() < (MAXINSTRUMENTS - 1)) //
       )
       {
         morphingInstrument.advance(); //point to next available instrument
-        morphedInstruments++;
       }
+      morphedInstruments++;
       morphStatus[morphingInstrument.getValue()] = 1;
       drumKitPatternPlaying[morphingInstrument.getValue()]->setValue(morphPattern[1][morphingInstrument.getValue()]);
       drumKitSamplePlaying[morphingInstrument.getValue()]->setValue(morphSample[1][morphingInstrument.getValue()]);
@@ -398,9 +395,11 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
         lastChange = _change;
         break;
       }
-      //if this instrument already morphed
+      //if this instrument already morphed, point to prdecessor instrument
       if (morphStatus[morphingInstrument.getValue()] == 0)
+      {
         morphingInstrument.reward(); //point to previous available instrument, until the first one
+      }
       morphedInstruments--;
       morphStatus[morphingInstrument.getValue()] = 0;
       drumKitPatternPlaying[morphingInstrument.getValue()]->setValue(morphPattern[0][morphingInstrument.getValue()]);
