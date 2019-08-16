@@ -52,7 +52,7 @@ boolean DEBUG = 0;
 #define MIDICHANNEL 1
 #define MOODMIDINOTE 20    //midi note to mood message
 #define MORPHMIDINOTE 21   //midi note to morph message
-#define L2CBANDWIDTH 40000 //40ms L2C communication /???WHY ?????
+#define L2CBANDWIDTH 50000 //40ms L2C communication /???WHY ?????
 
 uint8_t INSTRsampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
 uint8_t INSTRpatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
@@ -191,7 +191,7 @@ boolean referencePatternTablePad[MAXPADTABLES][32] = {
     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
 
 //uint8_t actualMood = 0;
-String moodName[MAXMOODS] = {"None", "Perfect4x4", "Mood3", "Mood4", "Mood5", "Mood6", "Mood7", "Mood8", "Mood9", //
+String moodName[MAXMOODS] = {"", "Perfect4x4", "Mood3", "Mood4", "Mood5", "Mood6", "Mood7", "Mood8", "Mood9", //
                              "Mood10", "Mood11", "Mood12", "Mood13"};
 
 uint8_t sampleKit[MAXMOODS][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
@@ -234,12 +234,14 @@ uint8_t lastQueuedMoodValue = 0;
 uint8_t lastDisplayedMorphBarGraph = 1; //0 to MAXINSTRUMENTS possible values
 int8_t morphedInstruments = -1;         //0 to MAXINSTRUMENTS possible values
 uint32_t lastTick;                      //last time step counter was ticked
-boolean doNothingWhenCPUisOver;         //time space between cpuAvailable and the next pulse
+boolean cpuCalculationDone;             //time space between cpuAvailable and the next pulse
+boolean pleaseUpdateMoodOnScreen;       //schedule some screen update
+boolean pleaseResetMorphActivity;       //schedule some screen update
 
 void ISRtriggerIn();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void SCREENdefaultScreen();
-void SCREENupdateMoodValue(uint8_t _last, uint8_t _new);
+void SCREENupdateMoodValue(uint8_t _new);
 void SCREENupdateMorphBarGraph(int8_t _size);
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change);
 void readEncoder();
@@ -252,8 +254,8 @@ void ISRtriggerIn()
 
 void setup()
 {
-  digitalWrite(SDA, LOW);
-  digitalWrite(SCL, LOW);
+  // digitalWrite(SDA, LOW);
+  // digitalWrite(SCL, LOW);
 
   if (DEBUG)
     Serial.begin(9600);
@@ -274,7 +276,7 @@ void setup()
     oldencoderValue[i] = 0;
   }
 
-  //set theese counters not cyclabe
+  //set these counters not cyclabe
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     drumKitPatternPlaying[i]->setCyclable(false);
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
@@ -292,7 +294,7 @@ void setup()
   }
   display.clearDisplay();
   display.setTextSize(1);      // Normal 1:1 pixel scale
-  display.setTextColor(WHITE); // Draw white text
+  display.setTextColor(WHITE); // white text
   display.cp437(true);
   display.setCursor(0, 0);
   display.println(F("Pantala Labs"));
@@ -300,9 +302,18 @@ void setup()
   display.display();
   delay(2000);
   SCREENdefaultScreen();
-  SCREENupdateMoodValue(0, 0);
+  SCREENupdateMoodValue(0);
   SCREENupdateMorphBarGraph(-1);
   display.display();
+
+  // while (true)
+  // {
+  //   display.fillRect(0, 29, SCREEN_WIDTH, 9, BLACK);
+  //   display.setCursor(0, 29);
+  //   display.print(random(12));
+  //   display.display();
+  //   delay(200);
+  // }
 }
 
 void loop()
@@ -312,7 +323,7 @@ void loop()
   {
     stepInterval.debounce();                  //start new step interval
     cpuBusy.debounce();                       //start cpu busy until the triggers get closed
-    doNothingWhenCPUisOver = false;           //flags to do nothiung until next step comes
+    cpuCalculationDone = false;               //flags to do nothiung until next step comes
     uint8_t thisStep = stepCounter.advance(); //advance step pointer
     uint8_t noteVelocity = 0;                 //calculate noteVelocity
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
@@ -338,18 +349,33 @@ void loop()
       playMidi(1, noteVelocity, MIDICHANNEL);
   }
   //PRIORITY 1 - calculate available CPU
-  if (cpuBusy.debounced() && cpuAvailable.debounced() && !doNothingWhenCPUisOver)
+  if (cpuBusy.debounced() && cpuAvailable.debounced() && !cpuCalculationDone)
   {
-    cpuAvailable.debounce(micros() - lastTick - L2CBANDWIDTH);
+    cpuAvailable.debounce(micros() - lastTick - 2000);
     lastTick = micros();
-    doNothingWhenCPUisOver = true;
+    cpuCalculationDone = true;
   }
   //PRIORITY 2 - do all other tasks
   if (!cpuAvailable.debounced())
   {
+    //do screen stuff FIRST
+    if (pleaseUpdateMoodOnScreen)
+    {
+      SCREENupdateMoodValue(moodPointer.getValue());
+      display.display();
+      pleaseUpdateMoodOnScreen = false;
+    }
+    else if (pleaseResetMorphActivity)
+    {
+      resetMorphActivity(); //reset all morph activity
+      display.display();    //refresh
+    }
+
     encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read encoder button
-    INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin();          //read mute button
-    readEncoder((uint8_t)encoderQueue.advance());                     //read encoder rotation
+
+    INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin(); //read mute button
+
+    readEncoder((uint8_t)encoderQueue.advance()); //read encoder rotation
 
     //mood selected....copy reference tables to morph area
     if (!encoderButtonMood.active() && interfaceEvent.debounced())
@@ -362,8 +388,7 @@ void loop()
         morphSample[1][i] = sampleKit[moodPointer.getValue()][i];
         morphPattern[1][i] = patternKit[moodPointer.getValue()][i];
       }
-      resetMorphActivity(); //reset all morph activity
-      display.display();    //refresh
+      pleaseResetMorphActivity = true;
     }
   }
   //close triggers
@@ -382,8 +407,8 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
       moodPointer.advance();
     if (lastQueuedMoodValue != moodPointer.getValue())
     {
-      SCREENupdateMoodValue(lastQueuedMoodValue, moodPointer.getValue());
-      display.display();
+      //
+      pleaseUpdateMoodOnScreen = true;
       lastQueuedMoodValue = moodPointer.getValue();
     }
     break;
@@ -476,9 +501,9 @@ void SCREENupdateMorphBarGraph(int8_t _size)
   {
     display.setCursor(40, 0);
     display.setTextColor(BLACK);
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-      display.print(F("|"));
-    //    display.fillRect(40, 0, 40, 9, BLACK);
+    // for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    //   display.print(F("|"));
+    display.fillRect(40, 0, 40, 9, BLACK);
     display.setCursor(40, 0);
     display.setTextColor(WHITE);
     for (int8_t i = 0; i <= _size; i++)
@@ -487,7 +512,7 @@ void SCREENupdateMorphBarGraph(int8_t _size)
   }
 }
 
-void SCREENupdateMoodValue(uint8_t _last, uint8_t _new)
+void SCREENupdateMoodValue(uint8_t _new)
 {
   display.fillRect(0, 29, SCREEN_WIDTH, 9, BLACK);
   display.setCursor(0, 29);
