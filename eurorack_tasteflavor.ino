@@ -27,14 +27,12 @@ Data flow diagram
 #include <Counter.h>
 #include <Trigger.h>
 #include <MIDI.h>
-MIDI_CREATE_DEFAULT_INSTANCE();
-#include <Wire.h>
-#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define SCREEN_WIDTH 128    // OLED display width, in pixels
-#define SCREEN_HEIGHT 64    // OLED display height, in pixels
-#define SCREEN_LINEHEIGHT 9 // OLED display height, in pixels
+MIDI_CREATE_DEFAULT_INSTANCE();
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 #define OLED_RESET 4 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -51,14 +49,27 @@ boolean DEBUG = 0;
 #define FIRSTSAMPLEENCODER 2 //total of sample encoders
 #define MAXINSTRUMENTS 6     //total of sample encoders
 #define TRIGGERINPIN 7       //total of sample encoders
-
 #define MIDICHANNEL 1
-uint8_t INSTRsampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};
-uint8_t INSTRpatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25};
-#define MOODMIDINOTE 20
-#define MORPHMIDINOTE 21
-EventDebounce stepInterval(125);
-EventDebounce interfaceEvent(200);
+#define MOODMIDINOTE 20    //midi note to mood message
+#define MORPHMIDINOTE 21   //midi note to morph message
+#define L2CBANDWIDTH 40000 //40ms L2C communication /???WHY ?????
+
+uint8_t INSTRsampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
+uint8_t INSTRpatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
+EventDebounce interfaceEvent(200);                                       //min time in ms to accept another interface event
+MicroDebounce stepInterval(125000);                                      //step sequence interval
+MicroDebounce cpuBusy(5500);                                             //discard the first 5ms to close the triggers
+MicroDebounce cpuAvailable(60000);                                       //calculated to do not mix essential tasks with interface tasks
+/*
+      +---+                                   |
+      |   |                                   |
+______|   |___________________________________|
+                              |<-safetyidle->|
+
+             |<-cpuAvailable->|
+      |<--->|cpuBusy                      
+      |<----------stepInterval----------->|
+ */
 
 //trigger out pins
 Trigger INSTR1trigger(5);
@@ -78,8 +89,9 @@ Switch encoderButtonChannel4(28, true);
 Switch encoderButtonChannel5(40, true);
 Switch encoderButtonChannel6(42, true);
 Switch *encoderButtons[MAXENCODERS] = {&encoderButtonMood, &encoderButtonMorph, &encoderButtonChannel1, &encoderButtonChannel2, &encoderButtonChannel3, &encoderButtonChannel4, &encoderButtonChannel5, &encoderButtonChannel6};
+Counter encoderButtonQueue(MAXENCODERS - 1);
 
-Switch triggerIn(TRIGGERINPIN);
+//Switch triggerIn(TRIGGERINPIN);
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
@@ -101,6 +113,7 @@ Switch INSTR4mute(17, true);
 Switch INSTR5mute(19, true);
 Switch INSTR6mute(24, true);
 Switch *INSTRmute[MAXINSTRUMENTS] = {&INSTR1mute, &INSTR2mute, &INSTR3mute, &INSTR4mute, &INSTR5mute, &INSTR6mute};
+Counter INSTRmuteQueue(MAXINSTRUMENTS - 1);
 
 Counter INSTR1patternPointer(MAXLOWTABLES - 1);
 Counter INSTR2patternPointer(MAXHITABLES - 1);
@@ -177,8 +190,10 @@ boolean referencePatternTablePad[MAXPADTABLES][32] = {
     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
 
-Counter moodPointer(MAXMOODS - 1);
 //uint8_t actualMood = 0;
+String moodName[MAXMOODS] = {"None", "Perfect4x4", "Mood3", "Mood4", "Mood5", "Mood6", "Mood7", "Mood8", "Mood9", //
+                             "Mood10", "Mood11", "Mood12", "Mood13"};
+
 uint8_t sampleKit[MAXMOODS][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                                {1, 2, 4, 3, 0, 0},
                                                {6, 4, 5, 3, 0, 0},
@@ -212,14 +227,17 @@ uint8_t morphSample[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
 uint8_t morphPattern[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                            {0, 0, 0, 0, 0, 0}};
 
+Counter moodPointer(MAXMOODS - 1);
 Counter morphingInstrument(5);
-int8_t lastChange = 0;
+int8_t lastChange = 0; //-1 / 0 / 1 possible values
 uint8_t lastQueuedMoodValue = 0;
-uint8_t lastDisplayedMorphBarGraph = 1;
-int8_t morphedInstruments = -1;
+uint8_t lastDisplayedMorphBarGraph = 1; //0 to MAXINSTRUMENTS possible values
+int8_t morphedInstruments = -1;         //0 to MAXINSTRUMENTS possible values
+uint32_t lastTick;                      //last time step counter was ticked
+boolean doNothingWhenCPUisOver;         //time space between cpuAvailable and the next pulse
 
 void ISRtriggerIn();
-uint8_t playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
+void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void SCREENdefaultScreen();
 void SCREENupdateMoodValue(uint8_t _last, uint8_t _new);
 void SCREENupdateMorphBarGraph(int8_t _size);
@@ -234,20 +252,13 @@ void ISRtriggerIn()
 
 void setup()
 {
+  digitalWrite(SDA, LOW);
+  digitalWrite(SCL, LOW);
+
   if (DEBUG)
     Serial.begin(9600);
-
-  triggerIn.attachCallOnRising(ISRtriggerIn);
+  //triggerIn.attachCallOnRising(ISRtriggerIn);
   MIDI.begin();
-
-  INSTR1patternPointer.setValue(patternKit[0][0]);
-  INSTR2patternPointer.setValue(patternKit[0][1]);
-  INSTR3patternPointer.setValue(patternKit[0][2]);
-
-  // drumKitPatternPlaying[0]->setValue(0);
-  // drumKitPatternPlaying[1]->setValue(0);
-  // drumKitPatternPlaying[2]->setValue(0);
-
   for (uint8_t i = 0; i < MAXENCODERS; i++)
   {
     // set encoder behavior
@@ -263,9 +274,18 @@ void setup()
     oldencoderValue[i] = 0;
   }
 
+  //set theese counters not cyclabe
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    drumKitPatternPlaying[i]->setCyclable(false);
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    drumKitSamplePlaying[i]->setCyclable(false);
+  moodPointer.setCyclable(false);
+  morphingInstrument.setCyclable(false);
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   { // Address 0x3D for 128x64
+    Serial.begin(9600);
     Serial.println(F("SSD1306 allocation failed"));
     for (;;)
       ; // Don't proceed
@@ -287,20 +307,12 @@ void setup()
 
 void loop()
 {
-  //read all encoders buttons
-  for (uint8_t i = 0; i < MAXENCODERS; i++)
-    encoderButtons[i]->readPin();
-
-  //read instrument mute buttons
-  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    INSTRmute[i]->readPin();
-
-  readEncoder(encoderQueue.advance());
-
-  //play mode on and interval ended
+  //PRIORITY 0 - please play next step
   if (playSteps && stepInterval.debounced())
   {
-    stepInterval.debounce();                  //start new interval
+    stepInterval.debounce();                  //start new step interval
+    cpuBusy.debounce();                       //start cpu busy until the triggers get closed
+    doNothingWhenCPUisOver = false;           //flags to do nothiung until next step comes
     uint8_t thisStep = stepCounter.advance(); //advance step pointer
     uint8_t noteVelocity = 0;                 //calculate noteVelocity
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
@@ -325,25 +337,38 @@ void loop()
     if (noteVelocity != 0)
       playMidi(1, noteVelocity, MIDICHANNEL);
   }
+  //PRIORITY 1 - calculate available CPU
+  if (cpuBusy.debounced() && cpuAvailable.debounced() && !doNothingWhenCPUisOver)
+  {
+    cpuAvailable.debounce(micros() - lastTick - L2CBANDWIDTH);
+    lastTick = micros();
+    doNothingWhenCPUisOver = true;
+  }
+  //PRIORITY 2 - do all other tasks
+  if (!cpuAvailable.debounced())
+  {
+    encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read encoder button
+    INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin();          //read mute button
+    readEncoder((uint8_t)encoderQueue.advance());                     //read encoder rotation
 
+    //mood selected....copy reference tables to morph area
+    if (!encoderButtonMood.active() && interfaceEvent.debounced())
+    {
+      interfaceEvent.debounce();                   //block any other interface event
+      for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood to morph area
+      {
+        morphSample[0][i] = drumKitSamplePlaying[i]->getValue();
+        morphPattern[0][i] = drumKitPatternPlaying[i]->getValue();
+        morphSample[1][i] = sampleKit[moodPointer.getValue()][i];
+        morphPattern[1][i] = patternKit[moodPointer.getValue()][i];
+      }
+      resetMorphActivity(); //reset all morph activity
+      display.display();    //refresh
+    }
+  }
   //close triggers
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     INSTRtriggers[i]->compute();
-
-  //mood selected....copy reference tables to morph area
-  if (!encoderButtonMood.active() && interfaceEvent.debounced())
-  {
-    interfaceEvent.debounce();
-    resetMorphActivity(); //reset all morph activity
-    display.display();
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood to morph area
-    {
-      morphSample[0][i] = drumKitSamplePlaying[i]->getValue();
-      morphPattern[0][i] = drumKitPatternPlaying[i]->getValue();
-      morphSample[1][i] = sampleKit[moodPointer.getValue()][i];
-      morphPattern[1][i] = patternKit[moodPointer.getValue()][i];
-    }
-  }
 }
 
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
@@ -355,10 +380,12 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
       moodPointer.reward();
     else
       moodPointer.advance();
-    //playMidi(MOODMIDINOTE, _newValue, MIDICHANNEL);
-    SCREENupdateMoodValue(lastQueuedMoodValue, moodPointer.getValue());
-    lastQueuedMoodValue = moodPointer.getValue();
-    display.display();
+    if (lastQueuedMoodValue != moodPointer.getValue())
+    {
+      SCREENupdateMoodValue(lastQueuedMoodValue, moodPointer.getValue());
+      display.display();
+      lastQueuedMoodValue = moodPointer.getValue();
+    }
     break;
 
   case MORPHENCODER:
@@ -411,7 +438,7 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
     display.display();
     break;
 
-  default:
+  default:                                   //all instrument encoders
     if (!encoderButtons[_encoder]->active()) //change instrument
     {
       if (_change == -1)
@@ -447,11 +474,11 @@ void SCREENupdateMorphBarGraph(int8_t _size)
 {
   if (lastDisplayedMorphBarGraph != _size)
   {
-    display.setTextSize(2);
     display.setCursor(40, 0);
     display.setTextColor(BLACK);
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
       display.print(F("|"));
+    //    display.fillRect(40, 0, 40, 9, BLACK);
     display.setCursor(40, 0);
     display.setTextColor(WHITE);
     for (int8_t i = 0; i <= _size; i++)
@@ -462,18 +489,14 @@ void SCREENupdateMorphBarGraph(int8_t _size)
 
 void SCREENupdateMoodValue(uint8_t _last, uint8_t _new)
 {
-  display.setTextSize(2);
-  display.setCursor(0, 29);
-  display.setTextColor(BLACK);
-  display.print(_last);
+  display.fillRect(0, 29, SCREEN_WIDTH, 9, BLACK);
   display.setCursor(0, 29);
   display.setTextColor(WHITE);
-  display.print(_new);
+  display.print(moodName[_new]);
 }
 
 void SCREENdefaultScreen()
 {
-  display.setTextSize(1);
   display.clearDisplay();
   display.setCursor(0, 0);
   display.print(F("Morph:"));
@@ -481,7 +504,7 @@ void SCREENdefaultScreen()
   display.print(F("Next mood:"));
 }
 
-uint8_t playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
+void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 {
   if (!DEBUG)
   {
@@ -489,13 +512,12 @@ uint8_t playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
   }
   else
   {
-    return;
-    Serial.print(_note);
-    Serial.print(" - ");
-    Serial.print(_velocity);
-    Serial.print(" - ");
-    Serial.print(_channel);
-    Serial.println(".");
+    // Serial.print(_note);
+    // Serial.print(" - ");
+    // Serial.print(_velocity);
+    // Serial.print(" - ");
+    // Serial.print(_channel);
+    // Serial.println(".");
   }
 }
 
