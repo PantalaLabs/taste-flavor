@@ -27,21 +27,26 @@ Data flow diagram
 #include <Counter.h>
 #include <Trigger.h>
 #include <MIDI.h>
-#include <Adafruit_SSD1306.h>
-
 MIDI_CREATE_DEFAULT_INSTANCE();
+#define I2C_ADDRESS 0x3C
+#define SCREEN_WIDTH 128  // OLED display width, in pixels
+#define SCREEN_HEIGHT 64  // OLED display height, in pixels
+#define TEXTLINE_HEIGHT 9 // OLED display height, in pixels
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+//adafruit
+#include <Adafruit_SSD1306.h>
 #define OLED_RESET 4 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//u8x8
+// #include <Arduino.h>
+// #include <U8x8lib.h>
+// U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // OLEDs without Reset of the Display
 
 boolean DEBUG = 0;
 
 #define MAXMOODS 13          //max steps combinations
-#define MAXSTEPS 32          //max step sequence
+#define MAXSTEPS 64          //max step sequence
 #define MYCHANNEL 1          //midi channel for data transmission
 #define MAXENCODERS 8        //total of encoders
 #define MOODENCODER 0        //total of sample encoders
@@ -50,26 +55,26 @@ boolean DEBUG = 0;
 #define MAXINSTRUMENTS 6     //total of sample encoders
 #define TRIGGERINPIN 7       //total of sample encoders
 #define MIDICHANNEL 1
-#define MOODMIDINOTE 20    //midi note to mood message
-#define MORPHMIDINOTE 21   //midi note to morph message
-#define L2CBANDWIDTH 50000 //40ms L2C communication /???WHY ?????
+#define MOODMIDINOTE 20  //midi note to mood message
+#define MORPHMIDINOTE 21 //midi note to morph message
+
+#define L2CSAFETY 50000 //50ms L2C communication /???WHY ?????
+#define CPUBUSY 5100    //50ms L2C communication /???WHY ?????
 
 uint8_t INSTRsampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
 uint8_t INSTRpatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
 EventDebounce interfaceEvent(200);                                       //min time in ms to accept another interface event
 MicroDebounce stepInterval(125000);                                      //step sequence interval
-MicroDebounce cpuBusy(5500);                                             //discard the first 5ms to close the triggers
+MicroDebounce cpuBusy(CPUBUSY);                                          //discard the first 5ms to close the triggers
 MicroDebounce cpuAvailable(60000);                                       //calculated to do not mix essential tasks with interface tasks
 /*
-      +---+                                   |
-      |   |                                   |
-______|   |___________________________________|
-                              |<-safetyidle->|
-
-             |<-cpuAvailable->|
-      |<--->|cpuBusy                      
-      |<----------stepInterval----------->|
- */
+      +---+                                             |
+      |   |                                             |
+______|   |_____________________________________________|
+      |<-->|CPUBUSY                     |<--L2CSAFETY-->|
+           |<-------cpuAvailable------->|
+      |<------------------stepInterval----------------->|
+*/
 
 //trigger out pins
 Trigger INSTR1trigger(5);
@@ -103,7 +108,7 @@ Counter encoderQueue(MAXENCODERS - 1);
 // #define PADCHANNEL 14
 
 #define MAXLOWTABLES 8
-#define MAXHITABLES 10
+#define MAXHITABLES 11
 #define MAXPADTABLES 18
 
 Switch INSTR1mute(6, true);
@@ -132,8 +137,8 @@ Counter INSTR5samplePointer(5);
 Counter INSTR6samplePointer(5);
 Counter *drumKitSamplePlaying[MAXINSTRUMENTS] = {&INSTR1samplePointer, &INSTR2samplePointer, &INSTR3samplePointer, &INSTR4samplePointer, &INSTR5samplePointer, &INSTR6samplePointer};
 
-uint8_t encPinA[MAXENCODERS] = {13, 9, 48, 30, 42, 24, 36, 15};
-uint8_t encPinB[MAXENCODERS] = {12, 10, 50, 32, 44, 26, 38, 14};
+uint8_t encPinA[MAXENCODERS] = {12, 9, 48, 30, 42, 24, 36, 15};
+uint8_t encPinB[MAXENCODERS] = {13, 10, 50, 32, 44, 26, 38, 14};
 int oldReadA[MAXENCODERS];
 int oldReadB[MAXENCODERS];
 int readA[MAXENCODERS];
@@ -143,56 +148,61 @@ int16_t oldencoderValue[MAXENCODERS];
 
 boolean playSteps = true;
 
-boolean referencePatternTableLow[MAXLOWTABLES][32] = {
+boolean referencePatternTableLow[MAXLOWTABLES][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
-    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //4x4
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}, //4x4 + 1
-    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}, //4x4 + 1
-    {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //tum tum...
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //
-    {0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //
-    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0}};
-boolean referencePatternTableHi[MAXHITABLES][32] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
+    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //4x4
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}, //4x4 + 1
+    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}, //4x4 + 1
+    {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //tum tum...
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //
+    {0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //
+    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0}};
+boolean referencePatternTableHi[MAXHITABLES][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
-    {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0}, //tss
-    {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //tah
-    {0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}, //tss......ts...
-    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}, //ti di di ....ti .....ti
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0}, //......tei tei tei
-    {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, //tah tah ath ath
-    {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}, //tah tah ath ath
-    {1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0}, //ti di di rápido
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}  //tststststststst
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
+    {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0}, //tss
+    {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}, //tah
+    {0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}, //tss......ts...
+    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}, //ti di di ....ti .....ti
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0}, //......tei tei tei
+    {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, //tah tah ath ath
+    {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}, //tah tah ath ath
+    {1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0}, //ti di di rápido
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, //tststststststst
+    {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}
+
 };
 
-boolean referencePatternTablePad[MAXPADTABLES][32] = {
+boolean referencePatternTablePad[MAXPADTABLES][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
-    {1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
-    {1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0},
-    {1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0},
-    {1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1},
-    {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
-    {1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0},
-    {1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0},
-    {1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1},
-    {1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0},
-    {1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1},
-    {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
-    {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    {1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    {1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0},
+    {1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0},
+    {1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1},
+    {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    {1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0},
+    {1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0},
+    {1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1},
+    {1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0},
+    {1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1},
+    {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
+    {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
 
 //uint8_t actualMood = 0;
-String moodName[MAXMOODS] = {"", "Perfect4x4", "Mood3", "Mood4", "Mood5", "Mood6", "Mood7", "Mood8", "Mood9", //
+String moodName[MAXMOODS] = {"", "Break Kicks 1", "4x4 mood 1", "4x4 mood 2", "4x4 mood 3", "4x4 mood 4", "4x4 mood 5", "4x4 mood 6", "Mood9", //
                              "Mood10", "Mood11", "Mood12", "Mood13"};
+
+int16_t moodDb[2][MAXMOODS] = {{-1, 3, 1, 0, 2, 4, 5, 6, 7, 8, 9, 10, 11},
+                               {3, 2, 4, 1, 5, 6, 7, 8, 9, 10, 11, 12, 13}}; //lastMood = MAXMOODS
 
 uint8_t sampleKit[MAXMOODS][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                                {1, 2, 4, 3, 0, 0},
@@ -227,25 +237,24 @@ uint8_t morphSample[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
 uint8_t morphPattern[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                            {0, 0, 0, 0, 0, 0}};
 
-Counter moodPointer(MAXMOODS - 1);
-Counter morphingInstrument(5);
-int8_t lastChange = 0; //-1 / 0 / 1 possible values
-uint8_t lastQueuedMoodValue = 0;
-uint8_t lastDisplayedMorphBarGraph = 1; //0 to MAXINSTRUMENTS possible values
-int8_t morphedInstruments = -1;         //0 to MAXINSTRUMENTS possible values
-uint32_t lastTick;                      //last time step counter was ticked
-boolean cpuCalculationDone;             //time space between cpuAvailable and the next pulse
-boolean pleaseUpdateMoodOnScreen;       //schedule some screen update
-boolean pleaseResetMorphActivity;       //schedule some screen update
+uint16_t moodPointer = 0;
+Counter morphingInstrument(MAXINSTRUMENTS);
+uint8_t dontRepeatThisMood = 0;
+int8_t lastMorphBarGraphValue = 10; //0 to MAXINSTRUMENTS possible values
+int8_t morphedInstruments = -1;     //0 to MAXINSTRUMENTS possible values
+uint32_t lastTick;                  //last time step counter was ticked
+uint32_t tickInterval;
+boolean cpuCalculationDone;        //time space between cpuAvailable and the next pulse
+boolean pleaseUpdateMood = false;  //schedule some screen update
+boolean pleaseUpdateMorph = false; //schedule some screen update
 
 void ISRtriggerIn();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
-void SCREENdefaultScreen();
-void SCREENupdateMoodValue(uint8_t _new);
-void SCREENupdateMorphBarGraph(int8_t _size);
+void SCREENdefault();
+void SCREENupdateMood();
+void SCREENupdateMorphBar(int8_t _size);
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change);
 void readEncoder();
-void resetMorphActivity();
 
 void ISRtriggerIn()
 {
@@ -276,16 +285,29 @@ void setup()
     oldencoderValue[i] = 0;
   }
 
-  //set these counters not cyclabe
+  //set these counters to not cyclabe
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     drumKitPatternPlaying[i]->setCyclable(false);
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     drumKitSamplePlaying[i]->setCyclable(false);
-  moodPointer.setCyclable(false);
   morphingInstrument.setCyclable(false);
 
-  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  //u8x8
+  // u8x8.begin();
+  // u8x8.setPowerSave(0);
+  // u8x8.setFont(u8x8_font_chroma48medium8_r);
+  // while (true)
+  // {
+  //   u8x8.println("Pantala labs");
+  //   u8x8.refreshDisplay(); // only required for SSD1606/7
+  //   u8x8.print("Taste & Flavor");
+  //   u8x8.refreshDisplay(); // only required for SSD1606/7
+  //   delay(200);
+  // }
+
+  //adafruit
+  //SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   { // Address 0x3D for 128x64
     Serial.begin(9600);
     Serial.println(F("SSD1306 allocation failed"));
@@ -301,31 +323,24 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.display();
   delay(2000);
-  SCREENdefaultScreen();
-  SCREENupdateMoodValue(0);
-  SCREENupdateMorphBarGraph(-1);
+  SCREENdefault();
+  SCREENupdateMood();
+  SCREENupdateMorphBar(-1);
   display.display();
-
-  // while (true)
-  // {
-  //   display.fillRect(0, 29, SCREEN_WIDTH, 9, BLACK);
-  //   display.setCursor(0, 29);
-  //   display.print(random(12));
-  //   display.display();
-  //   delay(200);
-  // }
 }
 
 void loop()
 {
-  //PRIORITY 0 - please play next step
+  //PRIORITY 0 - play next step
   if (playSteps && stepInterval.debounced())
   {
     stepInterval.debounce();                  //start new step interval
-    cpuBusy.debounce();                       //start cpu busy until the triggers get closed
-    cpuCalculationDone = false;               //flags to do nothiung until next step comes
+    cpuBusy.debounce();                       //puts cpu on idle until the triggers get closed
+    cpuCalculationDone = false;               //flags to remember that all cpu calculations was done
+    tickInterval = micros() - lastTick;       //total pulse interval
+    lastTick = micros();                      //save this tick time
     uint8_t thisStep = stepCounter.advance(); //advance step pointer
-    uint8_t noteVelocity = 0;                 //calculate noteVelocity
+    uint8_t noteVelocity = 0;                 //calculate final noteVelocity
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     {
       //if not muted and  this instrument step is TRUE
@@ -348,51 +363,52 @@ void loop()
     if (noteVelocity != 0)
       playMidi(1, noteVelocity, MIDICHANNEL);
   }
-  //PRIORITY 1 - calculate available CPU
-  if (cpuBusy.debounced() && cpuAvailable.debounced() && !cpuCalculationDone)
+  //PRIORITY 1 - calculate available CPU after cpuBusy ended
+  if (cpuBusy.debounced() && !cpuCalculationDone)
   {
-    cpuAvailable.debounce(micros() - lastTick - 2000);
-    lastTick = micros();
+    cpuAvailable.debounce(tickInterval - CPUBUSY - L2CSAFETY);
     cpuCalculationDone = true;
   }
-  //PRIORITY 2 - do all other tasks
+  //PRIORITY 2 - do screen related
   if (!cpuAvailable.debounced())
   {
+    readEncoder(encoderQueue.advance()); //read one encoder at time
     //do screen stuff FIRST
-    if (pleaseUpdateMoodOnScreen)
+    if (pleaseUpdateMood)
     {
-      SCREENupdateMoodValue(moodPointer.getValue());
+      SCREENupdateMood();
       display.display();
-      pleaseUpdateMoodOnScreen = false;
+      pleaseUpdateMood = false;
     }
-    else if (pleaseResetMorphActivity)
+    if (pleaseUpdateMorph)
     {
-      resetMorphActivity(); //reset all morph activity
-      display.display();    //refresh
+      SCREENupdateMorphBar(morphingInstrument.getValue());
+      display.display();
+      pleaseUpdateMorph = false;
     }
-
-    encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read encoder button
-
-    INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin(); //read mute button
-
-    readEncoder((uint8_t)encoderQueue.advance()); //read encoder rotation
-
     //mood selected....copy reference tables to morph area
-    if (!encoderButtonMood.active() && interfaceEvent.debounced())
+    else if (!encoderButtonMood.active() && interfaceEvent.debounced())
     {
       interfaceEvent.debounce();                   //block any other interface event
       for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood to morph area
       {
         morphSample[0][i] = drumKitSamplePlaying[i]->getValue();
         morphPattern[0][i] = drumKitPatternPlaying[i]->getValue();
-        morphSample[1][i] = sampleKit[moodPointer.getValue()][i];
-        morphPattern[1][i] = patternKit[moodPointer.getValue()][i];
+        morphSample[1][i] = sampleKit[moodPointer][i];
+        morphPattern[1][i] = patternKit[moodPointer][i];
       }
-      pleaseResetMorphActivity = true;
+      SCREENupdateMorphBar(-1);
+      display.display();
+      morphedInstruments = -1;
+      morphingInstrument.setValue(0);
+      for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+        morphStatus[i] = 0;
     }
   }
-  //close triggers
-  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+  //very low cpu time consumption tasks , could be done anytime
+  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read encoder button
+  INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin();          //read mute button
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)                      //close triggers
     INSTRtriggers[i]->compute();
 }
 
@@ -402,14 +418,19 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
   {
   case MOODENCODER:
     if (_change == 1)
-      moodPointer.reward();
+    { //point to next mood on Db
+      if (moodDb[1][moodPointer] != MAXMOODS)
+        moodPointer = moodDb[1][moodPointer];
+    }
     else
-      moodPointer.advance();
-    if (lastQueuedMoodValue != moodPointer.getValue())
+    { //point to previous mood on Db
+      if (moodDb[0][moodPointer] != -1)
+        moodPointer = moodDb[0][moodPointer];
+    }
+    if (dontRepeatThisMood != moodPointer)
     {
-      //
-      pleaseUpdateMoodOnScreen = true;
-      lastQueuedMoodValue = moodPointer.getValue();
+      pleaseUpdateMood = true;
+      dontRepeatThisMood = moodPointer;
     }
     break;
 
@@ -418,53 +439,29 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
     //CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
     if (_change == 1)
     {
-      //if all instruments already morphed, exit
-      if (morphingInstrument.getValue() == (MAXINSTRUMENTS - 1))
-      {
-        lastChange = _change;
-        break;
-      }
-      //if this instrument was already morphed and next instrument is allowed
-      if ((morphStatus[morphingInstrument.getValue()] == 1) &&   //
-          (morphingInstrument.getValue() < (MAXINSTRUMENTS - 1)) //
-      )
-      {
-        morphingInstrument.advance(); //point to next available instrument
-      }
-      morphedInstruments++;
-      morphStatus[morphingInstrument.getValue()] = 1;
-      drumKitPatternPlaying[morphingInstrument.getValue()]->setValue(morphPattern[1][morphingInstrument.getValue()]);
-      drumKitSamplePlaying[morphingInstrument.getValue()]->setValue(morphSample[1][morphingInstrument.getValue()]);
-      playMidi(INSTRsampleMidiNote[morphingInstrument.getValue()], drumKitSamplePlaying[morphingInstrument.getValue()]->getValue(), MIDICHANNEL);
+      morphingInstrument.advance();
+      drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphPattern[1][morphingInstrument.getValue() - 1]);
+      drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphSample[1][morphingInstrument.getValue() - 1]);
+      playMidi(INSTRsampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
     }
     //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
     else if (_change == -1)
     {
-      //if it is the first intrument and it is already morphed back
-      if ((morphingInstrument.getValue() == 0) && (morphStatus[morphingInstrument.getValue()] == 0))
+      if (morphingInstrument.getValue() > 0)
       {
-        SCREENupdateMorphBarGraph(-1);
-        lastChange = _change;
-        break;
+        drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphPattern[0][morphingInstrument.getValue() - 1]);
+        drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphSample[0][morphingInstrument.getValue() - 1]);
+        playMidi(INSTRsampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
       }
-      //if this instrument already morphed, point to prdecessor instrument
-      if (morphStatus[morphingInstrument.getValue()] == 0)
-      {
-        morphingInstrument.reward(); //point to previous available instrument, until the first one
-      }
-      morphedInstruments--;
-      morphStatus[morphingInstrument.getValue()] = 0;
-      drumKitPatternPlaying[morphingInstrument.getValue()]->setValue(morphPattern[0][morphingInstrument.getValue()]);
-      drumKitSamplePlaying[morphingInstrument.getValue()]->setValue(morphSample[0][morphingInstrument.getValue()]);
-      playMidi(INSTRsampleMidiNote[morphingInstrument.getValue()], drumKitSamplePlaying[morphingInstrument.getValue()]->getValue(), MIDICHANNEL);
+      morphingInstrument.reward(); //point to previous available instrument, until the first one
     }
-    lastChange = _change;
-    SCREENupdateMorphBarGraph(morphedInstruments);
-    display.display();
+    pleaseUpdateMorph = true;
     break;
 
-  default:                                   //all instrument encoders
-    if (!encoderButtons[_encoder]->active()) //change instrument
+    //all instrument encoders
+  default:
+    //if encoder button pressed , change instrument
+    if (!encoderButtons[_encoder]->active())
     {
       if (_change == -1)
         drumKitSamplePlaying[_encoder - 2]->reward();
@@ -473,7 +470,7 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
       morphSample[0][_encoder - 2] = drumKitSamplePlaying[_encoder - 2]->getValue();
       playMidi(INSTRsampleMidiNote[_encoder - 2], _newValue, MIDICHANNEL);
     }
-    else //change step pattern, do not send any midi
+    else //if not pressed , change step pattern
     {
       if (_change == -1)
         drumKitPatternPlaying[_encoder - 2]->reward();
@@ -486,47 +483,45 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
   }
 }
 
-void resetMorphActivity()
+void SCREENupdateMorphBar(int8_t _size)
 {
-  morphedInstruments = -1;
-  morphingInstrument.setValue(0);
-  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    morphStatus[i] = 0;
-  SCREENupdateMorphBarGraph(-1);
-}
-
-void SCREENupdateMorphBarGraph(int8_t _size)
-{
-  if (lastDisplayedMorphBarGraph != _size)
+  if (lastMorphBarGraphValue != _size)
   {
-    display.setCursor(40, 0);
-    display.setTextColor(BLACK);
-    // for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    //   display.print(F("|"));
-    display.fillRect(40, 0, 40, 9, BLACK);
+    display.fillRect(40, 0, SCREEN_WIDTH, TEXTLINE_HEIGHT, BLACK);
     display.setCursor(40, 0);
     display.setTextColor(WHITE);
-    for (int8_t i = 0; i <= _size; i++)
+    for (int8_t i = 0; i < _size; i++)
       display.print(F("|"));
-    lastDisplayedMorphBarGraph = _size;
+    lastMorphBarGraphValue = _size;
   }
 }
 
-void SCREENupdateMoodValue(uint8_t _new)
+void SCREENupdateMood()
 {
-  display.fillRect(0, 29, SCREEN_WIDTH, 9, BLACK);
-  display.setCursor(0, 29);
+  display.fillRect(0, TEXTLINE_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
   display.setTextColor(WHITE);
-  display.print(moodName[_new]);
+  display.setCursor(0, TEXTLINE_HEIGHT);
+  display.print(F("Mood:"));
+  display.print(moodName[moodPointer]);
+  for (int8_t j = 0; j < 4; j++)
+  {
+    for (int8_t i = 0; i < (MAXSTEPS - 2); i++)
+    {
+      if (referencePatternTableHi[patternKit[moodPointer][j]][i] == 1)
+      {
+        display.setCursor(i * 2, 15 + (j * 3));
+        display.print(F("."));
+      }
+    }
+  }
 }
 
-void SCREENdefaultScreen()
+void SCREENdefault()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
   display.print(F("Morph:"));
-  display.setCursor(0, 20);
-  display.print(F("Next mood:"));
+  display.setCursor(0, TEXTLINE_HEIGHT);
 }
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
