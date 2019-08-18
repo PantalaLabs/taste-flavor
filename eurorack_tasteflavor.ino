@@ -85,6 +85,7 @@ Trigger INSTR5trigger(23);
 Trigger INSTR6trigger(25);
 Trigger *INSTRtriggers[MAXINSTRUMENTS] = {&INSTR1trigger, &INSTR2trigger, &INSTR3trigger, &INSTR4trigger, &INSTR5trigger, &INSTR6trigger};
 
+//encoders buttons
 Switch encoderButtonMood(11, true);
 Switch encoderButtonMorph(8, true);
 Switch encoderButtonChannel1(52, true);
@@ -111,6 +112,7 @@ Counter encoderQueue(MAXENCODERS - 1);
 #define MAXHITABLES 11
 #define MAXPADTABLES 18
 
+//mute buttons
 Switch INSTR1mute(6, true);
 Switch INSTR2mute(4, true);
 Switch INSTR3mute(2, true);
@@ -120,6 +122,7 @@ Switch INSTR6mute(24, true);
 Switch *INSTRmute[MAXINSTRUMENTS] = {&INSTR1mute, &INSTR2mute, &INSTR3mute, &INSTR4mute, &INSTR5mute, &INSTR6mute};
 Counter INSTRmuteQueue(MAXINSTRUMENTS - 1);
 
+//playing instrument pattern pointer
 Counter INSTR1patternPointer(MAXLOWTABLES - 1);
 Counter INSTR2patternPointer(MAXHITABLES - 1);
 Counter INSTR3patternPointer(MAXHITABLES - 1);
@@ -128,7 +131,7 @@ Counter INSTR5patternPointer(MAXHITABLES - 1);
 Counter INSTR6patternPointer(MAXPADTABLES - 1);
 Counter *drumKitPatternPlaying[MAXINSTRUMENTS] = {&INSTR1patternPointer, &INSTR2patternPointer, &INSTR3patternPointer, &INSTR4patternPointer, &INSTR5patternPointer, &INSTR6patternPointer};
 
-//fill with max available samples on pi
+//playing instrument sample pointer
 Counter INSTR1samplePointer(5);
 Counter INSTR2samplePointer(5);
 Counter INSTR3samplePointer(5);
@@ -137,6 +140,7 @@ Counter INSTR5samplePointer(5);
 Counter INSTR6samplePointer(5);
 Counter *drumKitSamplePlaying[MAXINSTRUMENTS] = {&INSTR1samplePointer, &INSTR2samplePointer, &INSTR3samplePointer, &INSTR4samplePointer, &INSTR5samplePointer, &INSTR6samplePointer};
 
+//all encoder pins and related variables
 uint8_t encPinA[MAXENCODERS] = {12, 9, 48, 30, 42, 24, 36, 15};
 uint8_t encPinB[MAXENCODERS] = {13, 10, 50, 32, 44, 26, 38, 14};
 int oldReadA[MAXENCODERS];
@@ -147,7 +151,6 @@ int16_t newencoderValue[MAXENCODERS];
 int16_t oldencoderValue[MAXENCODERS];
 
 boolean playSteps = true;
-
 boolean referencePatternTableLow[MAXLOWTABLES][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
@@ -197,13 +200,11 @@ boolean referencePatternTablePad[MAXPADTABLES][MAXSTEPS] = {
     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0},
     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
 
-//uint8_t actualMood = 0;
+//MOOD
 String moodName[MAXMOODS] = {"", "Break Kicks 1", "4x4 mood 1", "4x4 mood 2", "4x4 mood 3", "4x4 mood 4", "4x4 mood 5", "4x4 mood 6", "Mood9", //
                              "Mood10", "Mood11", "Mood12", "Mood13"};
-
 int16_t moodDb[2][MAXMOODS] = {{-1, 3, 1, 0, 2, 4, 5, 6, 7, 8, 9, 10, 11},
-                               {3, 2, 4, 1, 5, 6, 7, 8, 9, 10, 11, 12, 13}}; //lastMood = MAXMOODS
-
+                               {3, 2, 4, 1, 5, 6, 7, 8, 9, 10, 11, 12, 13}};
 uint8_t sampleKit[MAXMOODS][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                                {1, 2, 4, 3, 0, 0},
                                                {6, 4, 5, 3, 0, 0},
@@ -231,7 +232,7 @@ uint8_t patternKit[MAXMOODS][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                                 {3, 1, 9, 6, 0, 0},
                                                 {3, 0, 9, 6, 0, 0}};
 
-uint8_t morphStatus[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+//MORPH
 uint8_t morphSample[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
                                           {0, 0, 0, 0, 0, 0}};
 uint8_t morphPattern[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
@@ -239,22 +240,27 @@ uint8_t morphPattern[2][MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0},
 
 uint16_t moodPointer = 0;
 Counter morphingInstrument(MAXINSTRUMENTS);
-uint8_t dontRepeatThisMood = 0;
-int8_t lastMorphBarGraphValue = 10; //0 to MAXINSTRUMENTS possible values
-int8_t morphedInstruments = -1;     //0 to MAXINSTRUMENTS possible values
-uint32_t lastTick;                  //last time step counter was ticked
-uint32_t tickInterval;
-boolean cpuCalculationDone;        //time space between cpuAvailable and the next pulse
-boolean pleaseUpdateMood = false;  //schedule some screen update
-boolean pleaseUpdateMorph = false; //schedule some screen update
+uint8_t dontRepeatThisMood = 255;          //prevents to execute 2 times the same action
+uint8_t dontRepeatThisMorph = 255;         //prevents to execute 2 times the same action
+uint8_t dontRepeatThisMoodSelection = 255; //prevents to execute 2 times the same action
+int8_t lastMorphBarGraphValue = 127;       //0 to MAXINSTRUMENTS possible values
+uint32_t lastTick;                         //last time step counter was ticked
+uint32_t tickInterval;                     //time in us between two ticks
+boolean cpuCalculationDone;                //time space between cpuAvailable and the next pulse
+boolean pleaseUpdateMood = false;          //schedule some screen update
+boolean pleaseUpdateMorph = false;         //schedule some screen update
+boolean pleaseSelectMood = false;          //schedule some screen update
+boolean defaultScreenNotActiveYet = true;
 
 void ISRtriggerIn();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
+void SCREENwelcome();
 void SCREENdefault();
 void SCREENupdateMood();
 void SCREENupdateMorphBar(int8_t _size);
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change);
 void readEncoder();
+void checkDefaultScreen();
 
 void ISRtriggerIn()
 {
@@ -272,7 +278,7 @@ void setup()
   MIDI.begin();
   for (uint8_t i = 0; i < MAXENCODERS; i++)
   {
-    // set encoder behavior
+    // set all encoder initial status
     pinMode(encPinA[i], INPUT);
     digitalWrite(encPinA[i], HIGH);
     pinMode(encPinB[i], INPUT);
@@ -305,8 +311,6 @@ void setup()
   //   delay(200);
   // }
 
-  //adafruit
-  //SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   { // Address 0x3D for 128x64
     Serial.begin(9600);
@@ -323,9 +327,7 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.display();
   delay(2000);
-  SCREENdefault();
-  SCREENupdateMood();
-  SCREENupdateMorphBar(-1);
+  SCREENwelcome();
   display.display();
 }
 
@@ -349,17 +351,20 @@ void loop()
         noteVelocity = noteVelocity + powint(2, 5 - i);
         INSTRtriggers[i]->start();
       }
+      //if not muted and  this instrument step is TRUE
       else if ((i <= 4) && (INSTRmute[i]->active() && (referencePatternTableHi[drumKitPatternPlaying[i]->getValue()][thisStep] == 1)))
       {
         noteVelocity = noteVelocity + powint(2, 5 - i);
         INSTRtriggers[i]->start();
       }
+      //if not muted and  this instrument step is TRUE
       else if ((i == 5) && (INSTRmute[i]->active() && (referencePatternTablePad[drumKitPatternPlaying[i]->getValue()][thisStep] == 1)))
       {
         noteVelocity = noteVelocity + powint(2, 5 - i);
         INSTRtriggers[i]->start();
       }
     }
+    //send midinote with binary coded triggers message
     if (noteVelocity != 0)
       playMidi(1, noteVelocity, MIDICHANNEL);
   }
@@ -369,49 +374,76 @@ void loop()
     cpuAvailable.debounce(tickInterval - CPUBUSY - L2CSAFETY);
     cpuCalculationDone = true;
   }
-  //PRIORITY 2 - do screen related
+  //PRIORITY 2 - do interface readings and screen updates
+  //read one encoder at time
+  readEncoder(encoderQueue.advance());
+  //mood selected....copy reference tables to morph area
+  if (!encoderButtonMood.active() && interfaceEvent.debounced())
+  {
+    interfaceEvent.debounce(); //block any other interface event
+    pleaseSelectMood = true;
+  }
+  //if cpu available to large display updates
   if (!cpuAvailable.debounced())
   {
-    readEncoder(encoderQueue.advance()); //read one encoder at time
     //do screen stuff FIRST
+    //update mood changes
     if (pleaseUpdateMood)
     {
+      checkDefaultScreen();
       SCREENupdateMood();
       display.display();
       pleaseUpdateMood = false;
     }
-    if (pleaseUpdateMorph)
+    //update morph bar changes
+    else if (pleaseUpdateMorph)
     {
+      checkDefaultScreen();
       SCREENupdateMorphBar(morphingInstrument.getValue());
       display.display();
       pleaseUpdateMorph = false;
     }
-    //mood selected....copy reference tables to morph area
-    else if (!encoderButtonMood.active() && interfaceEvent.debounced())
+    //copy selected mood to morph area
+    else if (pleaseSelectMood)
     {
-      interfaceEvent.debounce();                   //block any other interface event
-      for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood to morph area
+      if (dontRepeatThisMoodSelection != moodPointer)
       {
-        morphSample[0][i] = drumKitSamplePlaying[i]->getValue();
-        morphPattern[0][i] = drumKitPatternPlaying[i]->getValue();
-        morphSample[1][i] = sampleKit[moodPointer][i];
-        morphPattern[1][i] = patternKit[moodPointer][i];
+        checkDefaultScreen();
+        for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood tables to morph area
+        {
+          morphSample[0][i] = drumKitSamplePlaying[i]->getValue();
+          morphPattern[0][i] = drumKitPatternPlaying[i]->getValue();
+          morphSample[1][i] = sampleKit[moodPointer][i];
+          morphPattern[1][i] = patternKit[moodPointer][i];
+        }
+        SCREENupdateMorphBar(-1);
+        display.display();
+        morphingInstrument.setValue(0);
+        dontRepeatThisMoodSelection = moodPointer;
+        pleaseSelectMood = false;
       }
-      SCREENupdateMorphBar(-1);
-      display.display();
-      morphedInstruments = -1;
-      morphingInstrument.setValue(0);
-      for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-        morphStatus[i] = 0;
     }
   }
   //very low cpu time consumption tasks , could be done anytime
-  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read encoder button
-  INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin();          //read mute button
+  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); //read each encoder button
+  INSTRmute[(uint8_t)INSTRmuteQueue.advance()]->readPin();          //read each mute button
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)                      //close triggers
-    INSTRtriggers[i]->compute();
+    INSTRtriggers[i]->compute();                                    //shut them down
 }
 
+//check if default screen wasnt show yet
+void checkDefaultScreen()
+{
+  if (defaultScreenNotActiveYet)
+  {
+    defaultScreenNotActiveYet = false;
+    SCREENdefault();
+    SCREENupdateMood();
+    SCREENupdateMorphBar(-1);
+  }
+}
+
+//deal with any encoder change
 void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
 {
   switch (_encoder)
@@ -427,6 +459,7 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
       if (moodDb[0][moodPointer] != -1)
         moodPointer = moodDb[0][moodPointer];
     }
+    //saves CPU if mood changed but still in the same position , in the start and in the end of the list
     if (dontRepeatThisMood != moodPointer)
     {
       pleaseUpdateMood = true;
@@ -455,7 +488,9 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
       }
       morphingInstrument.reward(); //point to previous available instrument, until the first one
     }
-    pleaseUpdateMorph = true;
+    //prevents to update screen unnecessarilly with the same value
+    if (dontRepeatThisMorph != morphingInstrument.getValue())
+      pleaseUpdateMorph = true;
     break;
 
     //all instrument encoders
@@ -491,23 +526,21 @@ void SCREENupdateMorphBar(int8_t _size)
     display.setCursor(40, 0);
     display.setTextColor(WHITE);
     for (int8_t i = 0; i < _size; i++)
-      display.print(F("|"));
+      display.print(F(" O"));
     lastMorphBarGraphValue = _size;
   }
 }
 
 void SCREENupdateMood()
 {
-  display.fillRect(0, TEXTLINE_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK);
-  display.setTextColor(WHITE);
-  display.setCursor(0, TEXTLINE_HEIGHT);
-  display.print(F("Mood:"));
-  display.print(moodName[moodPointer]);
-  for (int8_t j = 0; j < 4; j++)
+  display.fillRect(0, TEXTLINE_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK); //black all screen from line 1 to end
+  display.setCursor(0, TEXTLINE_HEIGHT);                                    //set cursor position
+  display.print(moodName[moodPointer]);                                     //print mood name
+  for (int8_t j = 0; j < 4; j++)                                            //for each instrument
   {
-    for (int8_t i = 0; i < (MAXSTEPS - 2); i++)
+    for (int8_t i = 0; i < (MAXSTEPS - 2); i++) //for each step
     {
-      if (referencePatternTableHi[patternKit[moodPointer][j]][i] == 1)
+      if (referencePatternTableHi[patternKit[moodPointer][j]][i] == 1) //if it is an active step
       {
         display.setCursor(i * 2, 15 + (j * 3));
         display.print(F("."));
@@ -521,6 +554,14 @@ void SCREENdefault()
   display.clearDisplay();
   display.setCursor(0, 0);
   display.print(F("Morph:"));
+}
+
+void SCREENwelcome()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("<-- select your mood"));
+  display.println(F("   and morph it -->>"));
   display.setCursor(0, TEXTLINE_HEIGHT);
 }
 
