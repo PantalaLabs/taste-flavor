@@ -113,6 +113,10 @@ Counter encoderQueue(MAXENCODERS - 1);
 #define OHATCHANNEL 4
 #define PADCHANNEL 5
 
+#define MAXLOWCHANNELS 1
+#define MAXHICHANNELS 3
+#define MAXPADCHANNELS 1
+
 #define MAXLOWTABLES 16
 #define MAXHITABLES 26
 #define MAXPADTABLES 18
@@ -326,16 +330,15 @@ boolean playSteps = true;
 
 uint16_t moodPointer = 0;
 Counter morphingInstrument(MAXINSTRUMENTS);
-uint8_t dontRepeatThisMood = 255;          //prevents to execute 2 times the same action
-uint8_t dontRepeatThisMorph = 255;         //prevents to execute 2 times the same action
-uint8_t dontRepeatThisMoodSelection = 255; //prevents to execute 2 times the same action
-int8_t lastMorphBarGraphValue = 127;       //0 to MAXINSTRUMENTS possible values
-uint32_t lastTick;                         //last time step counter was ticked
-uint32_t tickInterval;                     //time in us between two ticks
-boolean pleaseUpdateMood = false;          //schedule some screen update
-int8_t pleaseUpdateMorph = 0;              //schedule some screen update
-boolean pleaseSelectMood = false;          //schedule some screen update
-int8_t pleaseUpdateOnePattern = -1;
+uint8_t lastSelectedMood = 255;          //prevents to execute 2 times the same action
+uint8_t lastSelectedMoodSelection = 255; //prevents to execute 2 times the same action
+int8_t lastMorphBarGraphValue = 127;     //0 to MAXINSTRUMENTS possible values
+uint32_t lastTick;                       //last time step counter was ticked
+uint32_t tickInterval;                   //time in us between two ticks
+boolean flagUpdateMood = false;        //schedule some screen update
+int8_t flagUpdateMorph = 0;            //schedule some screen update
+boolean flagSelectMood = false;        //schedule some screen update
+int8_t flagUpdateOneMorphedPattern = -1;
 boolean defaultScreenNotActiveYet = true;
 
 void ISRtriggerIn();
@@ -479,17 +482,17 @@ void loop()
   if (!freeZone2.debounced())
   { //do screen stuff FIRST
     //update mood changes
-    if (pleaseUpdateMood)
+    if (flagUpdateMood)
     {
       checkDefaultScreen();
       SCREENupdateMood();
       display.display();
-      pleaseUpdateMood = false;
+      flagUpdateMood = false;
     }
     //update morph bar changes
-    else if (pleaseUpdateMorph != 0)
+    else if (flagUpdateMorph != 0)
     {
-      if (pleaseUpdateMorph == 1)
+      if (flagUpdateMorph == 1)
       {
         morphingInstrument.advance();
         drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphPattern[1][morphingInstrument.getValue() - 1]);
@@ -497,7 +500,7 @@ void loop()
         playMidi(INSTRsampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
       }
       //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
-      else if (pleaseUpdateMorph == -1)
+      else if (flagUpdateMorph == -1)
       {
         drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphPattern[0][morphingInstrument.getValue() - 1]);
         drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphSample[0][morphingInstrument.getValue() - 1]);
@@ -507,12 +510,12 @@ void loop()
       checkDefaultScreen();
       SCREENupdateMorphBar(morphingInstrument.getValue());
       display.display();
-      pleaseUpdateMorph = 0;
+      flagUpdateMorph = 0;
     }
     //copy selected mood to morph area
-    else if (pleaseSelectMood)
+    else if (flagSelectMood)
     {
-      if (dontRepeatThisMoodSelection != moodPointer)
+      if (lastSelectedMoodSelection != moodPointer)
       {
         checkDefaultScreen();
         switch (mood[moodPointer][1].charAt(0))
@@ -567,44 +570,44 @@ void loop()
         SCREENupdateMorphBar(-1);
         display.display();
         morphingInstrument.setValue(0);
-        dontRepeatThisMoodSelection = moodPointer;
-        pleaseSelectMood = false;
+        lastSelectedMoodSelection = moodPointer;
+        flagSelectMood = false;
       }
     }
-    else if (pleaseUpdateOnePattern != -1)
+    else if (flagUpdateOneMorphedPattern != -1)
     {
       display.setTextColor(BLACK);
       for (int8_t i = 0; i < (MAXSTEPS - 2); i++) //for each step
       {
-        display.setCursor(i * 2, 15 + (pleaseUpdateOnePattern * 3));
+        display.setCursor(i * 2, 15 + (flagUpdateOneMorphedPattern * 3));
         display.print(F("."));
       }
       display.setTextColor(WHITE);
-      for (int8_t i = 0; i < (MAXSTEPS - 2); i++) //for each step
+      for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
       {
         boolean mustPrintDot = false;
-        if (pleaseUpdateOnePattern == 0) //low table
+        if (flagUpdateOneMorphedPattern < MAXLOWCHANNELS) //low table
         {
-          if (referencePatternTableLow[drumKitPatternPlaying[pleaseUpdateOnePattern]->getValue()][i] == 1) //if it is an active step
+          if (referencePatternTableLow[morphPattern[0][flagUpdateOneMorphedPattern]][step] == 1) //if it is an active step
             mustPrintDot = true;
         }
-        else if (pleaseUpdateOnePattern < 4) //hi table
+        else if (flagUpdateOneMorphedPattern < (MAXLOWCHANNELS + MAXHICHANNELS)) //hi table
         {
-          if (referencePatternTableHi[drumKitPatternPlaying[pleaseUpdateOnePattern]->getValue()][i] == 1) //if it is an active step
+          if (referencePatternTableHi[morphPattern[0][flagUpdateOneMorphedPattern]][step] == 1) //if it is an active step
             mustPrintDot = true;
         }
-        else
+        else //pad table
         {
-          //pad table
+          if (referencePatternTablePad[morphPattern[0][flagUpdateOneMorphedPattern]][step] == 1) //if it is an active step
+            mustPrintDot = true;
         }
         if (mustPrintDot)
         {
-          display.setCursor(i * 2, 15 + (pleaseUpdateOnePattern * 3));
+          display.setCursor(step * 2, 15 + (flagUpdateOneMorphedPattern * 3));
           display.print(F("."));
         }
       }
       display.display();
-      pleaseUpdateOnePattern = -1;
     }
   }
   //very low cpu consumption tasks , could be done anytime
@@ -618,7 +621,7 @@ void loop()
     if (!encoderButtonMood.active() && interfaceEvent.debounced())    //mood selected....copy reference tables or create new mood in the morph area
     {
       interfaceEvent.debounce(); //block any other interface event
-      pleaseSelectMood = true;
+      flagSelectMood = true;
     }
   }
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //search for ended triggers
@@ -642,10 +645,10 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
         moodPointer = moodDb[0][moodPointer];
     }
     //saves CPU if mood changed but still in the same position , in the start and in the end of the list
-    if (dontRepeatThisMood != moodPointer)
+    if (lastSelectedMood != moodPointer)
     {
-      pleaseUpdateMood = true;
-      dontRepeatThisMood = moodPointer;
+      flagUpdateMood = true;
+      lastSelectedMood = moodPointer;
     }
     break;
 
@@ -655,13 +658,13 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
     if (_change == 1)
     {
       if (!morphingInstrument.isAtEnd())
-        pleaseUpdateMorph = _change;
+        flagUpdateMorph = _change;
     }
     //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
     else if (_change == -1)
     {
       if (!morphingInstrument.isAtInit())
-        pleaseUpdateMorph = _change;
+        flagUpdateMorph = _change;
     }
     break;
     //all other instrument encoders
@@ -684,7 +687,7 @@ void encoderChanged(uint8_t _encoder, uint8_t _newValue, int8_t _change)
         drumKitPatternPlaying[_encoder - 2]->advance();
       morphPattern[0][_encoder - 2] = drumKitPatternPlaying[_encoder - 2]->getValue();
       playMidi(INSTRpatternMidiNote[_encoder - 2], drumKitPatternPlaying[_encoder - 2]->getValue(), MIDICHANNEL);
-      pleaseUpdateOnePattern = _encoder - 2;
+      flagUpdateOneMorphedPattern = _encoder - 2;
     }
     break;
   }
@@ -720,15 +723,32 @@ void SCREENupdateMood()
   display.fillRect(0, TEXTLINE_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK); //black all screen from line 1 to end
   display.setCursor(0, TEXTLINE_HEIGHT);                                    //set cursor position
   display.print(mood[moodPointer][0]);                                      //print mood name
-  for (int8_t j = 0; j < 4; j++)                                            //for each instrument
+  for (int8_t instr = 0; instr < MAXINSTRUMENTS; instr++)                   //for each instrument
   {
-    for (int8_t i = 0; i < (MAXSTEPS - 2); i++) //for each step
+    for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
     {
-      if (patternKit[moodPointer][j] > 0) //skip if pattern is null or nothing
+      if (patternKit[moodPointer][instr] > 0) //skip if pattern is null or nothing
       {
-        if (referencePatternTableHi[patternKit[moodPointer][j]][i] == 1) //if it is an active step
+        boolean mustPrintDot = false;
+        if (moodPointer < MAXLOWCHANNELS) //low table
         {
-          display.setCursor(i * 2, 15 + (j * 3));
+          if (referencePatternTableLow[patternKit[moodPointer][instr]][step] == 1) //if it is an active step
+            mustPrintDot = true;
+        }
+        else if (moodPointer < (MAXLOWCHANNELS + MAXHICHANNELS)) //hi table
+        {
+          if (referencePatternTableHi[patternKit[moodPointer][instr]][step] == 1) //if it is an active step
+            mustPrintDot = true;
+        }
+        else
+        {
+          //pad table
+          if (referencePatternTablePad[patternKit[moodPointer][instr]][step] == 1) //if it is an active step
+            mustPrintDot = true;
+        }
+        if (mustPrintDot)
+        {
+          display.setCursor(step * 2, 15 + (instr * 3));
           display.print(F("."));
         }
       }
