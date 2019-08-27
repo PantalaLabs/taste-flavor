@@ -20,7 +20,7 @@ Data flow diagram
 
 */
 
-#define DOMIDI true
+#define OPENMIDI true
 #define OPENSERIAL false
 #define OPENMIDIUSB false
 
@@ -29,13 +29,12 @@ Data flow diagram
 #include <MicroDebounce.h>
 #include <EventDebounce.h>
 #include <Counter.h>
-#include <Trigger.h>
 #include <Rotary.h>
+#include <DueTimer.h>
 #include <MIDIUSB.h>
-//#include <DueTimer.h>
-
-#ifdef DOMIDI
 #include <MIDI.h>
+
+#ifdef OPENMIDI
 MIDI_CREATE_DEFAULT_INSTANCE();
 #endif
 
@@ -73,32 +72,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
 uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
 EventDebounce interfaceEvent(200);                                       //min time in ms to accept another interface event
-MicroDebounce stepLenght(125000);                                        //step sequence interval
-MicroDebounce freeZone1(4000);                                           //first 4ms available toprocess light interface events
-MicroDebounce triggerZone(2000);                                         //freeze cpu 2ms to close the triggers
-MicroDebounce freeZone2(70000);                                          //big cpu time available to process screen and other stuff
-#define L2CSAFETY 35000UL                                                //48ms L2C communication on oscilloscope =  38000UL
-/*
-      +-----+                                             
-      |     |                                             
-______|     |____________________________________________|
-      |<-->|freeZone1                     
-          >|-|< triggerZone
-             |<---------freeZone2------->|
-                                         |<--L2CSAFETY-->|
-      |<--------------------stepLenght------------------>|
-*/
 
 //trigger out pins
-Trigger instr1trigger(5, true);
-Trigger instr2trigger(3, true);
-Trigger instr3trigger(16, true);
-Trigger instr4trigger(18, true);
-Trigger instr5trigger(23, true);
-Trigger instr6trigger(25, true);
-Trigger *triggers[MAXINSTRUMENTS] = {&instr1trigger, &instr2trigger, &instr3trigger, &instr4trigger, &instr5trigger, &instr6trigger};
-// uint8_t triggerPins[MAXINSTRUMENTS] = {5, 3, 16, 18, 23, 25};
-// boolean triggerBus[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+uint8_t triggerPins[MAXINSTRUMENTS] = {5, 3, 16, 18, 23, 25};
 
 //encoders buttons
 Switch encoderButtonMood(11, true);
@@ -154,15 +130,14 @@ Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &i
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
-boolean playSteps = true;
+volatile boolean flagAdvanceStepCounter = false;
+boolean flagUpdateStepLenght = false;
 
 uint16_t moodPointer = 0;
 Counter morphingInstrument(MAXINSTRUMENTS);
 uint8_t lastSelectedMood = 255;          //prevents to execute 2 times the same action
 uint8_t lastSelectedMoodSelection = 255; //prevents to execute 2 times the same action
 int8_t lastMorphBarGraphValue = 127;     //0 to MAXINSTRUMENTS possible values
-uint32_t lastTick;                       //last time step counter was ticked
-uint32_t tickInterval;                   //time in us between two ticks
 boolean flagUpdateMood = false;          //schedule some screen update
 int8_t flagUpdateMorph = 0;              //schedule some screen update
 boolean flagSelectMood = false;          //schedule some screen update
@@ -250,7 +225,6 @@ boolean referencePatternTablePad[MAXPADPATTERNS][MAXSTEPS] = {
 //MOOD===================================================================================================================
 //{name , action} action 0=mood switch / 1=mood command
 #define MAXMOODS 5 //max moods
-
 int16_t moodDb[2][MAXMOODS] = {{-1, 3, 1, 0, 2},
                                //4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
                                {3, 2, 4, 1, 5}};
@@ -310,6 +284,7 @@ uint8_t morphArea[2][2 * MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 // uint8_t lofiKick[MAXLOFIKICK] = {0, 3, 4, 12, 17, 23, 25, 42, 43, 44, 45};
 // #define MAXLOFIHAT 10
 // uint8_t lofiHihat[MAXLOFIHAT] = {6, 16, 17, 22, 24, 33, 42, 50, 53, 62};
+uint32_t stepLenght = 125000;
 
 void ISRtriggerIn();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
@@ -320,39 +295,18 @@ void SCREENprintStepDot(uint8_t _mood, uint8_t _i, uint8_t _j);
 void SCREENupdateMorphBar(int8_t _size);
 void readEncoder();
 void checkDefaultScreen();
-void startTriggerZone();
-void startFreeZone2();
 void SCREENupdateSampleAndPatternNumber(int8_t _val);
 void endTriggers();
-
-void ISRtriggerIn()
-{
-  //playSteps = !playSteps;
-}
-
-void startTriggerZone()
-{
-  triggerZone.debounce();
-}
-
-void startFreeZone2()
-{
-  uint32_t newInterval;
-  newInterval = (uint32_t)lastTick + (uint32_t)tickInterval - ((uint32_t)micros() + (uint32_t)L2CSAFETY);
-  freeZone2.debounce(newInterval);
-}
+boolean modifiers();
 
 void setup()
 {
-  freeZone1.attachCallOnDebounce(startTriggerZone); //freeze CPU to close the triggers
-  triggerZone.attachCallOnDebounce(startFreeZone2); //calculate available cpu right afetr the triggers got closed
-  if (OPENSERIAL)
-  {
-    Serial.begin(9600);
-    Serial.println("Debugging..");
-  }
+#ifdef OPENSERIAL
+  Serial.begin(9600);
+  Serial.println("Debugging..");
+#endif
 
-#ifdef DOMIDI
+#ifdef OPENMIDI
   MIDI.begin();
 #endif
 
@@ -366,10 +320,10 @@ void setup()
     encoders[i]->begin();
     delay(10);
   }
-
   //set these counters to not cyclabe
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
+    pinMode(triggerPins[i], OUTPUT);
     drumKitPatternPlaying[i]->setCyclable(false);
     drumKitSamplePlaying[i]->setCyclable(false);
   }
@@ -393,245 +347,269 @@ void setup()
   delay(2000);
   SCREENwelcome();
   display.display();
+
+  //internal timer for test purpose
+  Timer4.start(stepLenght);
+  Timer4.attachInterrupt(ISRtriggerIn);
+}
+
+void ISRtriggerIn()
+{
+
+  Timer3.start(5000); //start 5ms triggers timers
+  Timer3.attachInterrupt(endTriggers);
+  uint8_t noteVelocity = 0;                    //calculate final noteVelocity
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //for each instument
+  {                                            //if it is not muted
+    if (
+        instrumentMute[i]->active() &&                                                                                             //
+        (((i == 0) && (referencePatternTableLow[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) ||            //
+         (((i > 0) && (i < 5)) && (referencePatternTableHi[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) || //
+         ((i == 5) && (referencePatternTablePad[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1))               //
+         )                                                                                                                         //
+    )
+    {
+      noteVelocity = noteVelocity + powint(2, 5 - i);
+      digitalWrite(triggerPins[i], HIGH);
+    }
+  }
+  if (noteVelocity != 0)                    //if any trigger opened
+    playMidi(1, noteVelocity, MIDICHANNEL); //send midinote with binary coded triggers message
+  flagAdvanceStepCounter = true;            //flags to point step counter to next step
 }
 
 void loop()
 {
-  //PRIORITY 0 - play next step
-  if (playSteps && stepLenght.debounced())
+  //if its time to advance step counter pointer and adjust BPM if necessary
+  if (flagAdvanceStepCounter)
   {
-    // Timer3.attachInterrupt(endTriggers);
-    // Timer3.start(5000);
-    tickInterval = micros() - lastTick; //total pulse interval
-    lastTick = micros();                //save this tick time
-    stepLenght.debounce();              //start new step interval
-    freeZone1.debounce();               //frtees cpu to do small things
-    uint8_t noteVelocity = 0;           //calculate final noteVelocity
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    if (flagUpdateStepLenght)
     {
-      //if instrument not muted
-      if (
-          instrumentMute[i]->active() &&                                                                                             //
-          (((i == 0) && (referencePatternTableLow[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) ||            //
-           (((i > 0) && (i < 5)) && (referencePatternTableHi[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) || //
-           ((i == 5) && (referencePatternTablePad[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1))               //
-           )                                                                                                                         //
-      )
-      {
-        noteVelocity = noteVelocity + powint(2, 5 - i);
-        triggers[i]->start();
-      }
+      flagUpdateStepLenght = false;
+      Timer4.start(stepLenght);
     }
-    //send midinote with binary coded triggers message
-    if (noteVelocity != 0)
-      playMidi(1, noteVelocity, MIDICHANNEL);
     stepCounter.advance();
+    flagAdvanceStepCounter = false;
   }
 
-  //if cpu available for large display updates
+  //flags if any screen update will be necessary in this cycle
   boolean flagUpdateScreen = false;
+
+  //read all processed encoders interruptions
   for (uint8_t i = 0; i < MAXENCODERS; i++)
     readEncoder(i);
-  if (!freeZone2.debounced())
+
+  //if new mood was selected
+  if (flagUpdateMood)
   {
-    //update mood changes
-    if (flagUpdateMood)
-    {
-      checkDefaultScreen();
-      SCREENupdateMood();
-      flagUpdateMood = false;
-      flagUpdateScreen = true;
-    }
-
-    //update morph bar changes
-    if (flagUpdateMorph != 0)
-    {
-      if (flagUpdateMorph == 1)
-      {
-        morphingInstrument.advance();
-        drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[1][morphingInstrument.getValue() - 1]);
-        drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[1][morphingInstrument.getValue() - 1 + MAXINSTRUMENTS]);
-        playMidi(instrSampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
-      }
-      //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
-      else if (flagUpdateMorph == -1)
-      {
-        drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[0][morphingInstrument.getValue() - 1]);
-        drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[0][morphingInstrument.getValue() - 1 + MAXINSTRUMENTS]);
-        playMidi(instrSampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
-        morphingInstrument.reward(); //point to previous available instrument, until the first one
-      }
-      checkDefaultScreen();
-      SCREENupdateMorphBar(morphingInstrument.getValue());
-      flagUpdateMorph = 0;
-      flagUpdateScreen = true;
-    }
-
-    //copy selected mood to morph area
-    if (flagSelectMood)
-    {
-      if (lastSelectedMoodSelection != moodPointer)
-      {
-        checkDefaultScreen();
-        // case '0':
-        for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood tables to morph area
-        {
-          //copies the ALL ACTUAL PLAYING SAMPLE AND PATTERN to morph area 0
-          morphArea[0][i] = drumKitSamplePlaying[i]->getValue();                   //copy playing sample to morphArea 0
-          morphArea[0][i + MAXINSTRUMENTS] = drumKitPatternPlaying[i]->getValue(); //copy playing pattern to morphArea 0
-          //copy the new user selected sample to morph area 1
-          if (drumKit[moodPointer][i] != -1)           //if selected mood sample not an mood "add more"
-            morphArea[1][i] = drumKit[moodPointer][i]; //copy selected mood sample to morphArea 1
-          else                                         //else
-            morphArea[1][i] = morphArea[0][i];         //use actual playing sample
-          //copies the selected instrument to morph area 1
-          if (drumKit[moodPointer][i + MAXINSTRUMENTS] != -1)                            //if selected mood pattern not a mood "add more"
-            morphArea[1][i + MAXINSTRUMENTS] = drumKit[moodPointer][i + MAXINSTRUMENTS]; //copy selected mood pattern to morphArea 1
-          else                                                                           //else
-            morphArea[1][i + MAXINSTRUMENTS] = morphArea[0][i + MAXINSTRUMENTS];         //use actual playing pattern
-        }
-        //break;
-        // // behavior command request
-        // case 1: //lo fi kick
-        //   randomSeed(millis());
-
-        //   morphSample[0][0] = lofiKick[random(MAXLOFIKICK - 1)];            //use new lofi selected sample
-        //   morphSample[1][0] = morphSample[0][1];                            //use new lofi selected sample
-        //   drumKitSamplePlaying[0]->setValue(morphSample[0][0]);             //point to new sample
-        //   playMidi(instrSampleMidiNote[0], morphSample[0][0], MIDICHANNEL); //update rpi
-
-        //   morphSample[0][1] = drumKitPatternPlaying[1]->getValue(); //use actual playing sample
-        //   morphSample[1][1] = morphSample[0][1];                    //use actual playing sample
-
-        //   morphSample[0][2] = drumKitPatternPlaying[2]->getValue(); //use actual playing sample
-        //   morphSample[1][2] = morphSample[0][2];                    //use actual playing sample
-
-        //   morphSample[0][3] = drumKitPatternPlaying[3]->getValue(); //use actual playing sample
-        //   morphSample[1][3] = morphSample[0][3];                    //use actual playing sample
-
-        //   morphSample[0][4] = drumKitPatternPlaying[4]->getValue(); //use actual playing sample
-        //   morphSample[1][4] = morphSample[0][4];                    //use actual playing sample
-
-        //   morphSample[0][5] = drumKitPatternPlaying[5]->getValue(); //use actual playing sample
-        //   morphSample[1][5] = morphSample[0][5];                    //use actual playing sample
-
-        //   break;
-        // case 2: //lo fi hats
-        //   randomSeed(millis());
-        //   morphSample[0][0] = drumKitPatternPlaying[0]->getValue(); //use actual playing sample
-        //   morphSample[1][0] = morphSample[0][0];                    //use actual playing sample
-
-        //   morphSample[0][1] = drumKitPatternPlaying[1]->getValue(); //use actual playing sample
-        //   morphSample[1][1] = morphSample[0][1];                    //use actual playing sample
-
-        //   morphSample[0][2] = drumKitPatternPlaying[2]->getValue(); //use actual playing sample
-        //   morphSample[1][2] = morphSample[0][2];                    //use actual playing sample
-
-        //   morphSample[0][3] = drumKitPatternPlaying[3]->getValue(); //use actual playing sample
-        //   morphSample[1][3] = morphSample[0][3];                    //use actual playing sample
-
-        //   morphSample[0][4] = drumKitPatternPlaying[4]->getValue(); //use actual playing sample
-        //   morphSample[1][4] = morphSample[0][4];                    //use actual playing sample
-
-        //   morphSample[0][5] = lofiHihat[random(MAXLOFIHAT - 1)];            //use new lofi selected sample
-        //   morphSample[1][5] = morphSample[0][5];                            //use new lofi selected sample
-        //   morphPattern[0][5] = drumKitPatternPlaying[5]->getValue();        //use actual playing pattern
-        //   morphPattern[1][5] = morphPattern[0][5];                          //use actual playing pattern
-        //   drumKitSamplePlaying[5]->setValue(morphSample[0][5]);             //point to new sample
-        //   playMidi(instrSampleMidiNote[5], morphSample[0][5], MIDICHANNEL); //update rpi
-
-        //   morphSample[0][5] = drumKitPatternPlaying[5]->getValue(); //use actual playing sample
-        //   morphSample[1][5] = morphSample[0][5];                    //use actual playing sample
-        //        }
-        SCREENupdateMorphBar(-1);
-        morphingInstrument.setValue(0);
-        lastSelectedMoodSelection = moodPointer;
-        flagSelectMood = false;
-        flagUpdateScreen = true;
-      }
-    }
-
-    //update only one selected morphed pattern
-    if (flagUpdateThisMorphedPattern != -1)
-    {
-      display.fillRect(0, patternScreenYinit + 5 + (flagUpdateThisMorphedPattern * 3), SCREEN_WIDTH, 3, BLACK);
-      display.setTextColor(WHITE);
-      for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
-      {
-        boolean mustPrintStep = false;
-        if (flagUpdateThisMorphedPattern == KICKCHANNEL)
-        {
-          if (referencePatternTableLow[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
-            mustPrintStep = true;
-        }
-        else if ((flagUpdateThisMorphedPattern == SNAKERCHANNEL) ||
-                 (flagUpdateThisMorphedPattern == CLAPCHANNEL) ||
-                 (flagUpdateThisMorphedPattern == HATCHANNEL) ||
-                 (flagUpdateThisMorphedPattern == OHHRIDECHANNEL))
-        {
-          if (referencePatternTableHi[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
-            mustPrintStep = true;
-        }
-        else //pad table
-        {
-          if (referencePatternTablePad[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
-            mustPrintStep = true;
-        }
-        if (mustPrintStep)
-        {
-          display.setCursor(step * 2, patternScreenYinit + (flagUpdateThisMorphedPattern * 3));
-          display.print(F("."));
-        }
-      }
-      SCREENupdateSampleAndPatternNumber(flagUpdateThisMorphedDrumKit);
-      flagUpdateScreen = true;
-      flagUpdateThisMorphedPattern = -1;
-      flagUpdateThisMorphedDrumKit = -1;
-    }
-    if (flagUpdateSampleNumber != -1)
-    {
-      SCREENupdateSampleAndPatternNumber(flagUpdateSampleNumber);
-      flagUpdateScreen = true;
-      flagUpdateSampleNumber = -1;
-    }
-    if (flagUpdateScreen)
-      display.display();
+    checkDefaultScreen();
+    SCREENupdateMood();
+    flagUpdateMood = false;
+    flagUpdateScreen = true;
   }
-  //very low cpu consumption tasks---------------------------------------------------------------------------------
-  instrumentMute[(uint8_t)instrumentMuteQueue.advance()]->readPin(); //read one mute button
-  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin();  //read on encodert button
-  if (!encoderButtonMood.active() && interfaceEvent.debounced())     //mood selected....copy reference tables or create new mood in the morph area
+
+  //update morph bar changes
+  if (flagUpdateMorph != 0)
+  {
+    if (flagUpdateMorph == 1)
+    {
+      morphingInstrument.advance();
+      drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[1][morphingInstrument.getValue() - 1]);
+      drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[1][morphingInstrument.getValue() - 1 + MAXINSTRUMENTS]);
+      playMidi(instrSampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
+    }
+    //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
+    else if (flagUpdateMorph == -1)
+    {
+      drumKitSamplePlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[0][morphingInstrument.getValue() - 1]);
+      drumKitPatternPlaying[morphingInstrument.getValue() - 1]->setValue(morphArea[0][morphingInstrument.getValue() - 1 + MAXINSTRUMENTS]);
+      playMidi(instrSampleMidiNote[morphingInstrument.getValue() - 1], drumKitSamplePlaying[morphingInstrument.getValue() - 1]->getValue(), MIDICHANNEL);
+      morphingInstrument.reward(); //point to previous available instrument, until the first one
+    }
+    checkDefaultScreen();
+    SCREENupdateMorphBar(morphingInstrument.getValue());
+    flagUpdateMorph = 0;
+    flagUpdateScreen = true;
+  }
+
+  //copy selected mood to morph area
+  if (flagSelectMood)
+  {
+    if (lastSelectedMoodSelection != moodPointer)
+    {
+      checkDefaultScreen();
+      // case '0':
+      for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //copy selected mood tables to morph area
+      {
+        //copies the ALL ACTUAL PLAYING SAMPLE AND PATTERN to morph area 0
+        morphArea[0][i] = drumKitSamplePlaying[i]->getValue();                   //copy playing sample to morphArea 0
+        morphArea[0][i + MAXINSTRUMENTS] = drumKitPatternPlaying[i]->getValue(); //copy playing pattern to morphArea 0
+        //copy the new user selected sample to morph area 1
+        if (drumKit[moodPointer][i] != -1)           //if selected mood sample not an mood "add more"
+          morphArea[1][i] = drumKit[moodPointer][i]; //copy selected mood sample to morphArea 1
+        else                                         //else
+          morphArea[1][i] = morphArea[0][i];         //use actual playing sample
+        //copies the selected instrument to morph area 1
+        if (drumKit[moodPointer][i + MAXINSTRUMENTS] != -1)                            //if selected mood pattern not a mood "add more"
+          morphArea[1][i + MAXINSTRUMENTS] = drumKit[moodPointer][i + MAXINSTRUMENTS]; //copy selected mood pattern to morphArea 1
+        else                                                                           //else
+          morphArea[1][i + MAXINSTRUMENTS] = morphArea[0][i + MAXINSTRUMENTS];         //use actual playing pattern
+      }
+      //break;
+      // // behavior command request
+      // case 1: //lo fi kick
+      //   randomSeed(millis());
+
+      //   morphSample[0][0] = lofiKick[random(MAXLOFIKICK - 1)];            //use new lofi selected sample
+      //   morphSample[1][0] = morphSample[0][1];                            //use new lofi selected sample
+      //   drumKitSamplePlaying[0]->setValue(morphSample[0][0]);             //point to new sample
+      //   playMidi(instrSampleMidiNote[0], morphSample[0][0], MIDICHANNEL); //update rpi
+
+      //   morphSample[0][1] = drumKitPatternPlaying[1]->getValue(); //use actual playing sample
+      //   morphSample[1][1] = morphSample[0][1];                    //use actual playing sample
+
+      //   morphSample[0][2] = drumKitPatternPlaying[2]->getValue(); //use actual playing sample
+      //   morphSample[1][2] = morphSample[0][2];                    //use actual playing sample
+
+      //   morphSample[0][3] = drumKitPatternPlaying[3]->getValue(); //use actual playing sample
+      //   morphSample[1][3] = morphSample[0][3];                    //use actual playing sample
+
+      //   morphSample[0][4] = drumKitPatternPlaying[4]->getValue(); //use actual playing sample
+      //   morphSample[1][4] = morphSample[0][4];                    //use actual playing sample
+
+      //   morphSample[0][5] = drumKitPatternPlaying[5]->getValue(); //use actual playing sample
+      //   morphSample[1][5] = morphSample[0][5];                    //use actual playing sample
+
+      //   break;
+      // case 2: //lo fi hats
+      //   randomSeed(millis());
+      //   morphSample[0][0] = drumKitPatternPlaying[0]->getValue(); //use actual playing sample
+      //   morphSample[1][0] = morphSample[0][0];                    //use actual playing sample
+
+      //   morphSample[0][1] = drumKitPatternPlaying[1]->getValue(); //use actual playing sample
+      //   morphSample[1][1] = morphSample[0][1];                    //use actual playing sample
+
+      //   morphSample[0][2] = drumKitPatternPlaying[2]->getValue(); //use actual playing sample
+      //   morphSample[1][2] = morphSample[0][2];                    //use actual playing sample
+
+      //   morphSample[0][3] = drumKitPatternPlaying[3]->getValue(); //use actual playing sample
+      //   morphSample[1][3] = morphSample[0][3];                    //use actual playing sample
+
+      //   morphSample[0][4] = drumKitPatternPlaying[4]->getValue(); //use actual playing sample
+      //   morphSample[1][4] = morphSample[0][4];                    //use actual playing sample
+
+      //   morphSample[0][5] = lofiHihat[random(MAXLOFIHAT - 1)];            //use new lofi selected sample
+      //   morphSample[1][5] = morphSample[0][5];                            //use new lofi selected sample
+      //   morphPattern[0][5] = drumKitPatternPlaying[5]->getValue();        //use actual playing pattern
+      //   morphPattern[1][5] = morphPattern[0][5];                          //use actual playing pattern
+      //   drumKitSamplePlaying[5]->setValue(morphSample[0][5]);             //point to new sample
+      //   playMidi(instrSampleMidiNote[5], morphSample[0][5], MIDICHANNEL); //update rpi
+
+      //   morphSample[0][5] = drumKitPatternPlaying[5]->getValue(); //use actual playing sample
+      //   morphSample[1][5] = morphSample[0][5];                    //use actual playing sample
+      //        }
+      SCREENupdateMorphBar(-1);
+      morphingInstrument.setValue(0);
+      lastSelectedMoodSelection = moodPointer;
+      flagSelectMood = false;
+      flagUpdateScreen = true;
+    }
+  }
+
+  //if only one pattern changed
+  if (flagUpdateThisMorphedPattern != -1)
+  {
+    display.fillRect(0, patternScreenYinit + 5 + (flagUpdateThisMorphedPattern * 3), SCREEN_WIDTH, 3, BLACK);
+    display.setTextColor(WHITE);
+    for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
+    {
+      boolean mustPrintStep = false;
+      if (flagUpdateThisMorphedPattern == KICKCHANNEL)
+      {
+        if (referencePatternTableLow[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+          mustPrintStep = true;
+      }
+      else if ((flagUpdateThisMorphedPattern == SNAKERCHANNEL) ||
+               (flagUpdateThisMorphedPattern == CLAPCHANNEL) ||
+               (flagUpdateThisMorphedPattern == HATCHANNEL) ||
+               (flagUpdateThisMorphedPattern == OHHRIDECHANNEL))
+      {
+        if (referencePatternTableHi[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+          mustPrintStep = true;
+      }
+      else //pad table
+      {
+        if (referencePatternTablePad[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+          mustPrintStep = true;
+      }
+      if (mustPrintStep)
+      {
+        display.setCursor(step * 2, patternScreenYinit + (flagUpdateThisMorphedPattern * 3));
+        display.print(F("."));
+      }
+    }
+    SCREENupdateSampleAndPatternNumber(flagUpdateThisMorphedDrumKit);
+    flagUpdateScreen = true;
+    flagUpdateThisMorphedPattern = -1;
+    flagUpdateThisMorphedDrumKit = -1;
+  }
+
+  //if sampler changed
+  if (flagUpdateSampleNumber != -1)
+  {
+    SCREENupdateSampleAndPatternNumber(flagUpdateSampleNumber);
+    flagUpdateScreen = true;
+    flagUpdateSampleNumber = -1;
+  }
+
+  //if any screen update
+  if (flagUpdateScreen)
+    display.display();
+
+  //read if any instrument must be muted
+  instrumentMute[(uint8_t)instrumentMuteQueue.advance()]->readPin(); 
+
+  //read all encoders buttons
+  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); 
+
+  //if new mood was selected....copy reference tables or create new mood in the morph area
+  if (!encoderButtonMood.active() && interfaceEvent.debounced()) 
   {
     interfaceEvent.debounce(); //block any other interface event
     flagSelectMood = true;
   }
-  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //search for ended triggers
-    triggers[i]->compute();                    //shut them down
 }
 
-// void endTriggers()
-// {
-//   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //search for ended triggers
-//     digitalWrite(triggerPins[i], LOW);
-//   Timer3.stop();
-// }
+void endTriggers()
+{
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //search for ended triggers
+    digitalWrite(triggerPins[i], LOW);
+  Timer3.stop();
+  Timer3.detachInterrupt();
+}
+
+//return if any encoder button modifier is pressed
+boolean modifiers()
+{
+  return (!encoderButtons[4]->active() || !encoderButtons[6]->active());
+}
 
 //read queued encoder status
 void readEncoder(uint8_t _queued)
 {
   unsigned char result = encoders[_queued]->process();
-  if (result)
+  if ((result == 16) || (result == 32))
   {
-    int8_t _change = 0;
+    int8_t encoderChange = 0;
     if (result == 16)
-      _change = 1;
+      encoderChange = 1;
     else
-      _change = -1;
+      encoderChange = -1;
 
     switch (_queued)
     {
     case MOODENCODER:
-      if (_change == 1)
+      if (encoderChange == 1)
       { //point to next mood on Db
         if (moodDb[1][moodPointer] != MAXMOODS)
           moodPointer = moodDb[1][moodPointer];
@@ -650,26 +628,35 @@ void readEncoder(uint8_t _queued)
       break;
 
     case MORPHENCODER:
-      //CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
-      if (_change == 1)
+      //if encoder modifier is pressed and MORPH rotate CHANGE BPM
+      if (modifiers())
       {
-        if (!morphingInstrument.isAtEnd())
-          flagUpdateMorph = _change;
+        flagUpdateStepLenght = true;
+        stepLenght += -(encoderChange * 1000);
       }
-      //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
-      else if (_change == -1)
-      {
-        if (!morphingInstrument.isAtInit())
-          flagUpdateMorph = _change;
+      else
+      { //or else , just a morph change
+        //CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
+        if (encoderChange == 1)
+        {
+          if (!morphingInstrument.isAtEnd())
+            flagUpdateMorph = encoderChange;
+        }
+        //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
+        else if (encoderChange == -1)
+        {
+          if (!morphingInstrument.isAtInit())
+            flagUpdateMorph = encoderChange;
+        }
       }
       break;
       //all other instrument encoders
     default:
-      //if encoder button pressed , CHANGE SAMPLE, , schedule to change screen too
-      if (!encoderButtons[_queued]->active())
+      //if modifiers , CHANGE SAMPLE, schedule to change on screen too
+      if (modifiers())
       {
         uint8_t realEncoder = _queued - 2;
-        if (_change == -1)
+        if (encoderChange == -1)
           drumKitSamplePlaying[realEncoder]->reward();
         else
           drumKitSamplePlaying[realEncoder]->advance();
@@ -680,11 +667,11 @@ void readEncoder(uint8_t _queued)
         playMidi(instrSampleMidiNote[realEncoder], drumKitSamplePlaying[realEncoder]->getValue(), MIDICHANNEL);
         flagUpdateSampleNumber = drumKitSamplePlaying[realEncoder]->getValue(); //update only the sample number
       }
-      else //if not pressed , CHANGE PATTERN, schedule to change on screen too
+      else //if not modifiers , CHANGE PATTERN, schedule to change on screen too
       {
         //change ACTUAL PATTERN================================
         // uint8_t realEncoder = _queued - 2;
-        // if (_change == -1)
+        // if (encoderChange == -1)
         //   drumKitPatternPlaying[realEncoder]->reward();
         // else
         //   drumKitPatternPlaying[realEncoder]->advance();
@@ -698,9 +685,9 @@ void readEncoder(uint8_t _queued)
 
         //change TARGET MORPH PATTERN================================
         uint8_t realEncoder = _queued - 2;                                                               //get real encoder number
-        morphArea[1][realEncoder + MAXINSTRUMENTS] += _change;                                           //update destination morph area with the new pattern
+        morphArea[1][realEncoder + MAXINSTRUMENTS] += encoderChange;                                     //update destination morph area with the new pattern
         morphArea[1][realEncoder + MAXINSTRUMENTS] = max(0, morphArea[1][realEncoder + MAXINSTRUMENTS]); //only positive values
-        if (realEncoder < morphingInstrument.getValue())                                                //if instrument not morphed , force play the selected pattern
+        if (realEncoder < morphingInstrument.getValue())                                                 //if instrument not morphed , force play the selected pattern
           drumKitPatternPlaying[realEncoder]->setValue(morphArea[1][realEncoder + MAXINSTRUMENTS]);      //set new value
         flagUpdateThisMorphedPattern = realEncoder;                                                      //update screen
         flagUpdateThisMorphedDrumKit = morphArea[1][realEncoder + MAXINSTRUMENTS];                       //update screen
@@ -736,8 +723,7 @@ void SCREENdefault()
   display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
 }
 
-//morphbar is an visual indication about morphing instrumentPointers
-//6 steps of 10 pixels each
+//morphbar is an visual indication about morphing instrumentPointers / 6 steps of 10 pixels each
 void SCREENupdateMorphBar(int8_t _size)
 {
   if (lastMorphBarGraphValue != _size)
@@ -802,7 +788,7 @@ void SCREENupdateMood()
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 {
-#ifdef DOMIDI
+#ifdef OPENMIDI
   MIDI.sendNoteOn(_note, _velocity, _channel);
 #endif
 
@@ -812,6 +798,7 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 #endif
 }
 
+#ifdef OPENMIDIUSB
 void noteOn(byte channel, byte pitch, byte velocity)
 {
   midiEventPacket_t noteOn = {0x09, 0x90 | channel, pitch, velocity};
@@ -834,3 +821,4 @@ void controlChange(byte channel, byte control, byte value)
   midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
   MidiUSB.sendMIDI(event);
 }
+#endif
