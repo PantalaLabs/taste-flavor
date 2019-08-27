@@ -7,9 +7,9 @@ Data flow diagram
                                     +---------------------------+-----------------------+
                                     |
                                     V
-                           +--------------------+            +-------------------+          +-----------------------------+
-                           |instrXPatternPointer|            |instrXsamplePointer| <--------|rpi available sample quantity|
-                           +--------------------+            +-------------------+          +-----------------------------+
+                           +--------------------+            +-------------------+          +---------------------+
+                           |instrXPatternPointer|            |instrXsamplePointer| <--------|rpi available sample |
+                           +--------------------+            +-------------------+          +---------------------+
                                        |                                |
                                        +--------------------------------+
                                                       |
@@ -430,6 +430,8 @@ void loop()
 
   //if cpu available for large display updates
   boolean flagUpdateScreen = false;
+  for (uint8_t i = 0; i < MAXENCODERS; i++)
+    readEncoder(i);
   if (!freeZone2.debounced())
   {
     //update mood changes
@@ -598,9 +600,7 @@ void loop()
   //very low cpu consumption tasks---------------------------------------------------------------------------------
   instrumentMute[(uint8_t)instrumentMuteQueue.advance()]->readPin(); //read one mute button
   encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin();  //read on encodert button
-  for (uint8_t i = 0; i < MAXENCODERS; i++)
-    readEncoder(i);
-  if (!encoderButtonMood.active() && interfaceEvent.debounced()) //mood selected....copy reference tables or create new mood in the morph area
+  if (!encoderButtonMood.active() && interfaceEvent.debounced())     //mood selected....copy reference tables or create new mood in the morph area
   {
     interfaceEvent.debounce(); //block any other interface event
     flagSelectMood = true;
@@ -682,18 +682,28 @@ void readEncoder(uint8_t _queued)
       }
       else //if not pressed , CHANGE PATTERN, schedule to change on screen too
       {
-        uint8_t realEncoder = _queued - 2;
-        if (_change == -1)
-          drumKitPatternPlaying[realEncoder]->reward();
-        else
-          drumKitPatternPlaying[realEncoder]->advance();
-        // if ((realEncoder) <= (morphingInstrument.getValue()))
-        morphArea[1][realEncoder + MAXINSTRUMENTS] = drumKitPatternPlaying[realEncoder]->getValue();
+        //change ACTUAL PATTERN================================
+        // uint8_t realEncoder = _queued - 2;
+        // if (_change == -1)
+        //   drumKitPatternPlaying[realEncoder]->reward();
         // else
-        //   morphArea[0][realEncoder + MAXINSTRUMENTS] = drumKitPatternPlaying[realEncoder]->getValue();
-        playMidi(instrPatternMidiNote[realEncoder], drumKitPatternPlaying[realEncoder]->getValue(), MIDICHANNEL);
-        flagUpdateThisMorphedPattern = realEncoder;
-        flagUpdateThisMorphedDrumKit = drumKitPatternPlaying[realEncoder]->getValue();
+        //   drumKitPatternPlaying[realEncoder]->advance();
+        // // if ((realEncoder) <= (morphingInstrument.getValue()))
+        // morphArea[1][realEncoder + MAXINSTRUMENTS] = drumKitPatternPlaying[realEncoder]->getValue();
+        // // else
+        // //   morphArea[0][realEncoder + MAXINSTRUMENTS] = drumKitPatternPlaying[realEncoder]->getValue();
+        // playMidi(instrPatternMidiNote[realEncoder], drumKitPatternPlaying[realEncoder]->getValue(), MIDICHANNEL);
+        // flagUpdateThisMorphedPattern = realEncoder;
+        // flagUpdateThisMorphedDrumKit = drumKitPatternPlaying[realEncoder]->getValue();
+
+        //change TARGET MORPH PATTERN================================
+        uint8_t realEncoder = _queued - 2;                                                               //get real encoder number
+        morphArea[1][realEncoder + MAXINSTRUMENTS] += _change;                                           //update destination morph area with the new pattern
+        morphArea[1][realEncoder + MAXINSTRUMENTS] = max(0, morphArea[1][realEncoder + MAXINSTRUMENTS]); //only positive values
+        if (realEncoder < morphingInstrument.getValue())                                                //if instrument not morphed , force play the selected pattern
+          drumKitPatternPlaying[realEncoder]->setValue(morphArea[1][realEncoder + MAXINSTRUMENTS]);      //set new value
+        flagUpdateThisMorphedPattern = realEncoder;                                                      //update screen
+        flagUpdateThisMorphedDrumKit = morphArea[1][realEncoder + MAXINSTRUMENTS];                       //update screen
       }
       break;
     }
@@ -712,19 +722,34 @@ void checkDefaultScreen()
   }
 }
 
+void SCREENwelcome()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(F("<-- select your mood"));
+  display.println(F("    and morph it -->"));
+}
+
+void SCREENdefault()
+{
+  display.clearDisplay();
+  display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
+}
+
+//morphbar is an visual indication about morphing instrumentPointers
+//6 steps of 10 pixels each
 void SCREENupdateMorphBar(int8_t _size)
 {
   if (lastMorphBarGraphValue != _size)
   {
-    display.fillRect(32, 0, 70, TEXTLINE_HEIGHT, BLACK);
-    display.setCursor(32, 0);
-    display.setTextColor(WHITE);
+    display.fillRect(1, 1, 58, TEXTLINE_HEIGHT - 4, BLACK);
     for (int8_t i = 0; i < _size; i++)
-      display.print(F(" |"));
+      display.fillRect(10 * i, 0, 10, TEXTLINE_HEIGHT - 2, WHITE);
     lastMorphBarGraphValue = _size;
   }
 }
 
+//update screen right upper corner with the actual sample or pattern number
 void SCREENupdateSampleAndPatternNumber(int8_t _val)
 {
   display.fillRect(105, 0, 23, TEXTLINE_HEIGHT, BLACK);
@@ -733,6 +758,7 @@ void SCREENupdateSampleAndPatternNumber(int8_t _val)
   display.print(_val);
 }
 
+//update almost all bottom screen area with the name of the selected mood and all 6 available instruments
 void SCREENupdateMood()
 {
   display.fillRect(0, TEXTLINE_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK); //black all screen from line 1 to end
@@ -772,21 +798,6 @@ void SCREENupdateMood()
       }
     }
   }
-}
-
-void SCREENdefault()
-{
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.print(F("Morph:"));
-}
-
-void SCREENwelcome()
-{
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println(F("<-- select your mood"));
-  display.println(F("    and morph it -->"));
 }
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
