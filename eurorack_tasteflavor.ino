@@ -25,8 +25,6 @@ Data flow diagram
 #define OPENMIDIUSB false
 
 #include <PantalaDefines.h>
-#include <Switch.h>
-#include <MicroDebounce.h>
 #include <EventDebounce.h>
 #include <Counter.h>
 #include <Rotary.h>
@@ -69,34 +67,21 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define MAXHIPATTERNS 26
 #define MAXPADPATTERNS 18
 
-uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
-uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
 EventDebounce interfaceEvent(200);                                       //min time in ms to accept another interface event
 
-//trigger out pins
+uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
+uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
+
+//trigger out pins : instruments
 uint8_t triggerPins[MAXINSTRUMENTS] = {5, 3, 16, 18, 23, 25};
 
-//encoders buttons
-Switch encoderButtonMood(11, true);
-Switch encoderButtonMorph(8, true);
-Switch encoderButtonChannel1(52, true);
-Switch encoderButtonChannel2(34, true);
-Switch encoderButtonChannel3(46, true);
-Switch encoderButtonChannel4(28, true);
-Switch encoderButtonChannel5(40, true);
-Switch encoderButtonChannel6(22, true);
-Switch *encoderButtons[MAXENCODERS] = {&encoderButtonMood, &encoderButtonMorph, &encoderButtonChannel1, &encoderButtonChannel2, &encoderButtonChannel3, &encoderButtonChannel4, &encoderButtonChannel5, &encoderButtonChannel6};
-Counter encoderButtonQueue(MAXENCODERS - 1);
+//encoders buttons : mood, morph, instruments
+uint8_t encoderButtonPins[MAXENCODERS] = {11, 8, 52, 34, 46, 28, 40, 22};
+boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 //mute buttons
-Switch instr1mute(6, true);
-Switch instr2mute(4, true);
-Switch instr3mute(2, true);
-Switch instr4mute(17, true);
-Switch instr5mute(19, true);
-Switch instr6mute(27, true);
-Switch *instrumentMute[MAXINSTRUMENTS] = {&instr1mute, &instr2mute, &instr3mute, &instr4mute, &instr5mute, &instr6mute};
-Counter instrumentMuteQueue(MAXINSTRUMENTS - 1);
+uint8_t instrumentMutePins[MAXINSTRUMENTS] = {6, 4, 2, 17, 19, 27};
+boolean instrumentMuteState[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //playing instrument pattern pointer
 Counter instr1patternPointer(MAXKICKPATTERNS - 1);
@@ -126,7 +111,8 @@ Rotary instr5encoder(38, 36);
 Rotary instr6encoder(14, 15);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
-//Switch triggerIn(TRIGGERINPIN);
+Counter morphingInstrument(MAXINSTRUMENTS);
+
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
@@ -134,7 +120,6 @@ volatile boolean flagAdvanceStepCounter = false;
 boolean flagUpdateStepLenght = false;
 
 uint16_t moodPointer = 0;
-Counter morphingInstrument(MAXINSTRUMENTS);
 uint8_t lastSelectedMood = 255;          //prevents to execute 2 times the same action
 uint8_t lastSelectedMoodSelection = 255; //prevents to execute 2 times the same action
 int8_t lastMorphBarGraphValue = 127;     //0 to MAXINSTRUMENTS possible values
@@ -297,7 +282,7 @@ void readEncoder();
 void checkDefaultScreen();
 void SCREENupdateSampleAndPatternNumber(int8_t _val);
 void endTriggers();
-boolean modifiers();
+boolean flagModifierPressed = false;
 
 void setup()
 {
@@ -314,21 +299,34 @@ void setup()
   Serial.begin(115200);
 #endif
 
+  //pinMode(TRIGGERINPIN, INPUT);
   //triggerIn.attachCallOnRising(ISRtriggerIn);
+
+  //start all encoders
   for (uint8_t i = 0; i < MAXENCODERS; i++)
-  {
     encoders[i]->begin();
-    delay(10);
-  }
+
+  //start all encoders buttons
+  for (uint8_t i = 0; i < MAXENCODERS; i++)
+    pinMode(encoderButtonPins[i], INPUT_PULLUP);
+
+  //start all mute buttons
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    pinMode(instrumentMutePins[i], INPUT_PULLUP);
+
+  //start all trigger out pins
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    pinMode(triggerPins[i], OUTPUT);
+
   //set these counters to not cyclabe
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
-    pinMode(triggerPins[i], OUTPUT);
     drumKitPatternPlaying[i]->setCyclable(false);
     drumKitSamplePlaying[i]->setCyclable(false);
   }
   morphingInstrument.setCyclable(false);
 
+  //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   { // Address 0x3D for 128x64
     Serial.begin(9600);
@@ -348,7 +346,7 @@ void setup()
   SCREENwelcome();
   display.display();
 
-  //internal timer for test purpose
+  //internal clock
   Timer4.start(stepLenght);
   Timer4.attachInterrupt(ISRtriggerIn);
 }
@@ -362,7 +360,7 @@ void ISRtriggerIn()
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //for each instument
   {                                            //if it is not muted
     if (
-        instrumentMute[i]->active() &&                                                                                             //
+        !instrumentMuteState[i] &&                                                                                             //
         (((i == 0) && (referencePatternTableLow[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) ||            //
          (((i > 0) && (i < 5)) && (referencePatternTableHi[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) || //
          ((i == 5) && (referencePatternTablePad[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1))               //
@@ -380,6 +378,7 @@ void ISRtriggerIn()
 
 void loop()
 {
+  //step counter advance ===============================================================
   //if its time to advance step counter pointer and adjust BPM if necessary
   if (flagAdvanceStepCounter)
   {
@@ -392,6 +391,8 @@ void loop()
     flagAdvanceStepCounter = false;
   }
 
+  //check for all screen updates ===============================================================
+  
   //flags if any screen update will be necessary in this cycle
   boolean flagUpdateScreen = false;
 
@@ -562,36 +563,38 @@ void loop()
     flagUpdateSampleNumber = -1;
   }
 
+  //if new mood was selected....copy reference tables or create new mood in the morph area
+  if (encoderButtonState[0] && interfaceEvent.debounced())
+  {
+    interfaceEvent.debounce(); //block any other interface event
+    flagSelectMood = true;
+  }
+
+  //read interface inputs ===============================================================
   //if any screen update
   if (flagUpdateScreen)
     display.display();
 
   //read if any instrument must be muted
-  instrumentMute[(uint8_t)instrumentMuteQueue.advance()]->readPin(); 
+  for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
+    instrumentMuteState[i] = !digitalRead(instrumentMutePins[i]);
 
   //read all encoders buttons
-  encoderButtons[(uint8_t)encoderButtonQueue.advance()]->readPin(); 
+  for (int8_t i = 0; i < MAXENCODERS; i++)
+    encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
 
-  //if new mood was selected....copy reference tables or create new mood in the morph area
-  if (!encoderButtonMood.active() && interfaceEvent.debounced()) 
-  {
-    interfaceEvent.debounce(); //block any other interface event
-    flagSelectMood = true;
-  }
+  //flags if any encoder button modifier is pressed
+  flagModifierPressed = (encoderButtonState[4] || encoderButtonState[6]);
+
 }
 
+//close all trigger
 void endTriggers()
 {
-  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //search for ended triggers
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     digitalWrite(triggerPins[i], LOW);
-  Timer3.stop();
+  Timer3.stop(); //stops trigger timer
   Timer3.detachInterrupt();
-}
-
-//return if any encoder button modifier is pressed
-boolean modifiers()
-{
-  return (!encoderButtons[4]->active() || !encoderButtons[6]->active());
 }
 
 //read queued encoder status
@@ -629,7 +632,7 @@ void readEncoder(uint8_t _queued)
 
     case MORPHENCODER:
       //if encoder modifier is pressed and MORPH rotate CHANGE BPM
-      if (modifiers())
+      if (flagModifierPressed)
       {
         flagUpdateStepLenght = true;
         stepLenght += -(encoderChange * 1000);
@@ -652,8 +655,8 @@ void readEncoder(uint8_t _queued)
       break;
       //all other instrument encoders
     default:
-      //if modifiers , CHANGE SAMPLE, schedule to change on screen too
-      if (modifiers())
+      //if modifier , CHANGE SAMPLE, schedule to change on screen too
+      if (flagModifierPressed)
       {
         uint8_t realEncoder = _queued - 2;
         if (encoderChange == -1)
@@ -667,7 +670,7 @@ void readEncoder(uint8_t _queued)
         playMidi(instrSampleMidiNote[realEncoder], drumKitSamplePlaying[realEncoder]->getValue(), MIDICHANNEL);
         flagUpdateSampleNumber = drumKitSamplePlaying[realEncoder]->getValue(); //update only the sample number
       }
-      else //if not modifiers , CHANGE PATTERN, schedule to change on screen too
+      else //if not flagModifierPressed , CHANGE PATTERN, schedule to change on screen too
       {
         //change ACTUAL PATTERN================================
         // uint8_t realEncoder = _queued - 2;
@@ -723,7 +726,7 @@ void SCREENdefault()
   display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
 }
 
-//morphbar is an visual indication about morphing instrumentPointers / 6 steps of 10 pixels each
+//updates the morphing status / 6 steps of 10 pixels each
 void SCREENupdateMorphBar(int8_t _size)
 {
   if (lastMorphBarGraphValue != _size)
