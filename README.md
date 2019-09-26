@@ -1,2 +1,2 @@
-# taste-flafor
+# taste-flavor
 taste&amp;flavor prototype
