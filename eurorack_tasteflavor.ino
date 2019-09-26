@@ -38,7 +38,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 
 //adafruit
 #include <Adafruit_SSD1306.h>
-#define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define OLED_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define MAXSTEPS 64      //max step sequence
@@ -172,9 +172,11 @@ int8_t flagUpdateThisMorphedPattern = -1;
 int8_t flagUpdateThisMorphedDrumKit = -1;
 int8_t flagUpdateSampleNumber = -1;
 int8_t flagEraseInstrumentPattern = -1;
+int8_t flagTapInstrumentPattern = -1;
+int8_t flagTapStep = -1;
 boolean defaultScreenNotActiveYet = true;
 
-boolean referencePatternTableLow[MAXKICKPATTERNS][MAXSTEPS] = {
+boolean romPatternTableLow[MAXKICKPATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -196,7 +198,7 @@ boolean referencePatternTableLow[MAXKICKPATTERNS][MAXSTEPS] = {
 
 };
 
-boolean referencePatternTableHi[MAXHIPATTERNS][MAXSTEPS] = {
+boolean romPatternTableHi[MAXHIPATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -228,7 +230,7 @@ boolean referencePatternTableHi[MAXHIPATTERNS][MAXSTEPS] = {
 
 };
 
-boolean referencePatternTablePad[MAXPADPATTERNS][MAXSTEPS] = {
+boolean romPatternTablePad[MAXPADPATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -304,12 +306,11 @@ int8_t drumKit[MAXMOODS][(2 * MAXINSTRUMENTS) + 2] = {
 // {65, 22, 28, 4, 3, 4},{14, 23, 22, 0, 6, 0},
 // {-1, -1, -1, -1, 6, -1}, {15, 24, 25, 0, 0, 0},
 
-//MORPH 6 samples + 6 patterns / 0=morph area 0 / 1=morph area 1
+//MORPH 6 pointer samples + 6 pointer patterns / 0=morph area 0 / 1=morph area 1
 uint8_t morphArea[2][2 * MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                                             {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-// //morph 0,1,2 = kick/hi/pad morph area 0
-// //morph 3,4,5 = kick/hi/pad morph area 1
-// boolean morphpatterns[6][MAXSTEPS] = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+//pattern playground
+// boolean ramPatterns[2][6][MAXSTEPS] = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 //                                       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 //                                       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 //                                       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -411,9 +412,9 @@ void ISRtriggerIn()
   {                                            //if it is not muted
     if (
         !instrumentMuteState[i] &&                                                                                                 //
-        (((i == 0) && (referencePatternTableLow[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) ||            //
-         (((i > 0) && (i < 5)) && (referencePatternTableHi[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) || //
-         ((i == 5) && (referencePatternTablePad[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1))               //
+        (((i == 0) && (romPatternTableLow[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) ||            //
+         (((i > 0) && (i < 5)) && (romPatternTableHi[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1)) || //
+         ((i == 5) && (romPatternTablePad[drumKitPatternPlaying[i]->getValue()][stepCounter.getValue()] == 1))               //
          )                                                                                                                         //
     )
     {
@@ -581,7 +582,7 @@ void loop()
       boolean mustPrintStep = false;
       if (flagUpdateThisMorphedPattern == KICKCHANNEL)
       {
-        if (referencePatternTableLow[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+        if (romPatternTableLow[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
           mustPrintStep = true;
       }
       else if ((flagUpdateThisMorphedPattern == SNAKERCHANNEL) ||
@@ -589,12 +590,12 @@ void loop()
                (flagUpdateThisMorphedPattern == HATCHANNEL) ||
                (flagUpdateThisMorphedPattern == OHHRIDECHANNEL))
       {
-        if (referencePatternTableHi[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+        if (romPatternTableHi[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
           mustPrintStep = true;
       }
       else //pad table
       {
-        if (referencePatternTablePad[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
+        if (romPatternTablePad[flagUpdateThisMorphedDrumKit][step] == 1) //if it is an active step
           mustPrintStep = true;
       }
       if (mustPrintStep)
@@ -621,15 +622,27 @@ void loop()
     flagSelectMood = true;
   }
 
+  //if some pattern should be erased
   if (flagEraseInstrumentPattern != -1)
   {
     SCREENeraseInstrumentPattern(flagEraseInstrumentPattern);
     morphArea[1][flagEraseInstrumentPattern + MAXINSTRUMENTS] = 0;
-    //        if (flagEraseInstrumentPattern < morphingInstrument.getValue())                                            //if instrument not morphed , force play the selected pattern
-    drumKitPatternPlaying[flagEraseInstrumentPattern]->setValue(0); //set new value
+    if (flagEraseInstrumentPattern < morphingInstrument.getValue())   //if instrument not morphed , force play the selected pattern
+      drumKitPatternPlaying[flagEraseInstrumentPattern]->setValue(0); //set new value
     flagUpdateScreen = true;
     flagEraseInstrumentPattern = -1;
   }
+
+  //if some step should be tapped
+  // if (flagTapInstrumentPattern != -1)
+  // {
+  //   //SCREENeraseInstrumentPattern(flagEraseInstrumentPattern);
+  //   if (flagEraseInstrumentPattern < morphingInstrument.getValue())   //if instrument not morphed , force play the selected pattern
+  //     drumKitPatternPlaying[flagEraseInstrumentPattern]->setValue(0); //set new value
+  //   flagUpdateScreen = true;
+  //   flagTapInstrumentPattern = -1;
+  //   flagTapStep = -1;
+  // }
 
   //read interface inputs ===============================================================
   //if any screen update
@@ -645,8 +658,14 @@ void loop()
   {
     instrumentMuteState[i] = !digitalRead(instrumentMutePins[i]);
     //check if any pattern should be erased
-    if (instrumentMuteState[i] && onlyOneEncoderButtonTrue(i + 2))
+    if (instrumentMuteState[i] && onlyOneEncoderButtonTrue(MORPHENCODER))
       flagEraseInstrumentPattern = i;
+    //check if any pattern should be tapped
+    if (instrumentMuteState[i] && onlyOneEncoderButtonTrue(i + 2))
+    {
+      flagTapInstrumentPattern = i;
+      flagTapStep = stepCounter.getValue();
+    }
   }
 }
 
@@ -857,7 +876,7 @@ void SCREENupdateMood()
           boolean mustPrintStep = false;
           if (moodPointer == KICKCHANNEL)
           {
-            if (referencePatternTableLow[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+            if (romPatternTableLow[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
               mustPrintStep = true;
           }
           else if ((moodPointer == SNAKERCHANNEL) ||
@@ -865,13 +884,13 @@ void SCREENupdateMood()
                    (moodPointer == HATCHANNEL) ||
                    (moodPointer == OHHRIDECHANNEL))
           {
-            if (referencePatternTableHi[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+            if (romPatternTableHi[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
               mustPrintStep = true;
           }
           else
           {
             //pad table
-            if (referencePatternTablePad[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+            if (romPatternTablePad[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
               mustPrintStep = true;
           }
           if (mustPrintStep)
@@ -915,4 +934,26 @@ boolean onlyTwoEncoderButtonTrue(uint8_t target1, uint8_t target2)
     return false;
   //if all tests where OK
   return true;
+}
+
+void copyRomPatternToRam(uint8_t _romIndex, uint8_t _pattern, boolean _morphArea)
+{
+  for (uint8_t i = 0; i < MAXSTEPS; i++)
+  {
+    if (_pattern == KICKCHANNEL)
+    {
+      ramPatterns[_morphArea][_pattern][i] = romPatternTableLow[_romIndex]][i];
+    }
+    else if ((moodPointer == SNAKERCHANNEL) ||
+             (moodPointer == CLAPCHANNEL) ||
+             (moodPointer == HATCHANNEL) ||
+             (moodPointer == OHHRIDECHANNEL))
+    {
+      ramPatterns[_morphArea][_pattern][i] = romPatternTableHi[_romIndex]][i];
+    }
+    else
+    {
+      ramPatterns[_morphArea][_pattern][i] = romPatternTablePad[_romIndex]][i];
+    }
+  }
 }
