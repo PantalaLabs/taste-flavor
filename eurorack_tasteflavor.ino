@@ -50,7 +50,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define MIDICHANNEL 1    //standart drum midi channel
 #define MOODMIDINOTE 20  //midi note to mood message
 #define MORPHMIDINOTE 21 //midi note to morph message
-#define patternScreenYinit 12
+#define BLUESCREENINIT 12
 #define KICKCHANNEL 0
 #define SNAKERCHANNEL 1 //snare + shaker
 #define CLAPCHANNEL 2
@@ -171,7 +171,7 @@ boolean flagSelectMood = false;          //schedule some screen update
 int8_t flagUpdateThisMorphedPattern = -1;
 int8_t flagUpdateThisMorphedDrumKit = -1;
 int8_t flagUpdateSampleNumber = -1;
-
+int8_t flagEraseInstrumentPattern = -1;
 boolean defaultScreenNotActiveYet = true;
 
 boolean referencePatternTableLow[MAXKICKPATTERNS][MAXSTEPS] = {
@@ -332,10 +332,12 @@ void checkDefaultScreen();
 void SCREENwelcome();
 void SCREENupdateMood();
 void SCREENupdateMorphBar(int8_t _size);
-void SCREENupdateSampleAndPatternNumber(int8_t _val);
+void SCREENupdateSampleOrPatternNumber(boolean _smp, int8_t _val);
 void SCREENprintStepDot(uint8_t _step, uint8_t _instr);
 void SCREENeraseInstrumentPattern(uint8_t _instr);
 void endTriggers();
+boolean onlyOneEncoderButtonTrue(uint8_t target);
+boolean onlyTwoEncoderButtonTrue(uint8_t target1, uint8_t target2);
 
 void setup()
 {
@@ -574,7 +576,7 @@ void loop()
   {
     SCREENeraseInstrumentPattern(flagUpdateThisMorphedPattern);
     display.setTextColor(WHITE);
-    for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
+    for (int8_t step = 0; step < MAXSTEPS; step++) //for each step
     {
       boolean mustPrintStep = false;
       if (flagUpdateThisMorphedPattern == KICKCHANNEL)
@@ -598,7 +600,7 @@ void loop()
       if (mustPrintStep)
         SCREENprintStepDot(step, flagUpdateThisMorphedPattern);
     }
-    SCREENupdateSampleAndPatternNumber(flagUpdateThisMorphedDrumKit);
+    SCREENupdateSampleOrPatternNumber(false, flagUpdateThisMorphedDrumKit);
     flagUpdateScreen = true;
     flagUpdateThisMorphedPattern = -1;
     flagUpdateThisMorphedDrumKit = -1;
@@ -607,16 +609,26 @@ void loop()
   //if sampler changed
   if (flagUpdateSampleNumber != -1)
   {
-    SCREENupdateSampleAndPatternNumber(flagUpdateSampleNumber);
+    SCREENupdateSampleOrPatternNumber(true, flagUpdateSampleNumber);
     flagUpdateScreen = true;
     flagUpdateSampleNumber = -1;
   }
 
   //if new mood was selected....copy reference tables or create new mood in the morph area
-  if (encoderButtonState[ENCBUTMOOD] && interfaceEvent.debounced())
+  if (onlyOneEncoderButtonTrue(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(); //block any other interface event
     flagSelectMood = true;
+  }
+
+  if (flagEraseInstrumentPattern != -1)
+  {
+    SCREENeraseInstrumentPattern(flagEraseInstrumentPattern);
+    morphArea[1][flagEraseInstrumentPattern + MAXINSTRUMENTS] = 0;
+    //        if (flagEraseInstrumentPattern < morphingInstrument.getValue())                                            //if instrument not morphed , force play the selected pattern
+    drumKitPatternPlaying[flagEraseInstrumentPattern]->setValue(0); //set new value
+    flagUpdateScreen = true;
+    flagEraseInstrumentPattern = -1;
   }
 
   //read interface inputs ===============================================================
@@ -624,12 +636,18 @@ void loop()
   if (flagUpdateScreen)
     display.display();
 
-  //read all encoders buttons (inverts boolean state)
+  //read all encoders buttons (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXENCODERS; i++)
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
-  //read if any instrument must be muted (inverts boolean state)
+
+  //read if any instrument should be muted (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
+  {
     instrumentMuteState[i] = !digitalRead(instrumentMutePins[i]);
+    //check if any pattern should be erased
+    if (instrumentMuteState[i] && onlyOneEncoderButtonTrue(i + 2))
+      flagEraseInstrumentPattern = i;
+  }
 }
 
 //close all trigger
@@ -676,7 +694,7 @@ void readEncoder(uint8_t _queued)
 
     case MORPHENCODER:
       //if morph button is pressed and MORPH rotate CHANGE BPM
-      if (encoderButtonState[ENCBUTMORPH])
+      if (onlyOneEncoderButtonTrue(ENCBUTMORPH))
       {
         flagUpdateStepLenght = true;
         stepLenght += -(encoderChange * 1000);
@@ -701,7 +719,7 @@ void readEncoder(uint8_t _queued)
     default:
       uint8_t realEncoder = _queued - 2;
       //if only one modifier pressed , change SAMPLE, schedule to change on screen too
-      if (encoderButtonState[sampleButtonModifier[realEncoder]])
+      if (onlyOneEncoderButtonTrue(sampleButtonModifier[realEncoder]))
       {
         if (encoderChange == -1)
           drumKitSamplePlaying[realEncoder]->reward();
@@ -774,14 +792,20 @@ void SCREENwelcome()
 //erase exatctly one line pattern
 void SCREENeraseInstrumentPattern(uint8_t _instr)
 {
-  display.fillRect(0, patternScreenYinit + 5 + (_instr * 3), SCREEN_WIDTH, 3, BLACK);
+  display.fillRect(0, BLUESCREENINIT + 5 + (_instr * 7), SCREEN_WIDTH, 6, BLACK);
 }
 
 //printone step dot
 void SCREENprintStepDot(uint8_t _step, uint8_t _instr)
 {
-  display.setCursor(_step * 2, patternScreenYinit + (_instr * 3));
-  display.print(F("."));
+  uint8_t validStep;
+  validStep = _step;
+  if (_step > 32)
+    validStep = _step - 32;
+  display.fillRect(validStep * 4, BLUESCREENINIT + 5 + (_instr * 7), 3, 5, WHITE);
+
+  // display.setCursor(_step * 2, BLUESCREENINIT + (_instr * 3));
+  // display.print(F("."));
 }
 
 //updates the morphing status / 6 steps of 10 pixels each
@@ -797,11 +821,19 @@ void SCREENupdateMorphBar(int8_t _size)
 }
 
 //update screen right upper corner with the actual sample or pattern number
-void SCREENupdateSampleAndPatternNumber(int8_t _val)
+void SCREENupdateSampleOrPatternNumber(boolean _smp, int8_t _val)
 {
-  display.fillRect(105, 0, 23, TEXTLINE_HEIGHT, BLACK);
-  display.setCursor(105, 0);
+  display.fillRect(70, 0, SCREEN_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
+  display.setCursor(70, 0);
   display.setTextColor(WHITE);
+  if (_smp)
+  {
+    display.print("smp:");
+  }
+  else
+  {
+    display.print("pat:");
+  }
   display.print(_val);
 }
 
@@ -817,30 +849,34 @@ void SCREENupdateMood()
     SCREENeraseInstrumentPattern(instr);
     for (int8_t step = 0; step < (MAXSTEPS - 2); step++) //for each step
     {
-      if (drumKit[moodPointer][instr + MAXINSTRUMENTS] > 0) //skip if pattern is null or nothing
+      if ((step < 16) || (step >= 48)) //print only the first and last 16th steps
       {
-        boolean mustPrintStep = false;
-        if (moodPointer == KICKCHANNEL)
+
+        if (drumKit[moodPointer][instr + MAXINSTRUMENTS] > 0) //skip if pattern is null or nothing
         {
-          if (referencePatternTableLow[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
-            mustPrintStep = true;
+          boolean mustPrintStep = false;
+          if (moodPointer == KICKCHANNEL)
+          {
+            if (referencePatternTableLow[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+              mustPrintStep = true;
+          }
+          else if ((moodPointer == SNAKERCHANNEL) ||
+                   (moodPointer == CLAPCHANNEL) ||
+                   (moodPointer == HATCHANNEL) ||
+                   (moodPointer == OHHRIDECHANNEL))
+          {
+            if (referencePatternTableHi[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+              mustPrintStep = true;
+          }
+          else
+          {
+            //pad table
+            if (referencePatternTablePad[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
+              mustPrintStep = true;
+          }
+          if (mustPrintStep)
+            SCREENprintStepDot(step, instr);
         }
-        else if ((moodPointer == SNAKERCHANNEL) ||
-                 (moodPointer == CLAPCHANNEL) ||
-                 (moodPointer == HATCHANNEL) ||
-                 (moodPointer == OHHRIDECHANNEL))
-        {
-          if (referencePatternTableHi[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
-            mustPrintStep = true;
-        }
-        else
-        {
-          //pad table
-          if (referencePatternTablePad[drumKit[moodPointer][instr + MAXINSTRUMENTS]][step] == 1) //if it is an active step
-            mustPrintStep = true;
-        }
-        if (mustPrintStep)
-          SCREENprintStepDot(step, instr);
       }
     }
   }
@@ -849,4 +885,34 @@ void SCREENupdateMood()
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 {
   MIDI.sendNoteOn(_note, _velocity, _channel);
+}
+
+//verify if ONLY ONE encoder button is pressed
+boolean onlyOneEncoderButtonTrue(uint8_t target)
+{
+  if (encoderButtonState[target]) //if asked button is pressed
+  {
+    for (int8_t i = 0; i < MAXENCODERS; i++)      //search all encoder buttons
+      if ((i != target) && encoderButtonState[i]) //encoder button is not the asked one and it is pressed , so there are 2 encoder buttons pressed
+        return false;
+  }
+  else //if not pressed , return false
+    return false;
+  //if all tests where OK
+  return true;
+}
+
+//verify if TWO encoder button is pressed
+boolean onlyTwoEncoderButtonTrue(uint8_t target1, uint8_t target2)
+{
+  if (encoderButtonState[target1] && encoderButtonState[target2]) //if two asked buttons are pressed
+  {
+    for (int8_t i = 0; i < MAXENCODERS; i++)                         //search all encoder buttons
+      if ((i != target1) && (i != target2) && encoderButtonState[i]) //encoder button is not any of asked and it is pressed , so there is a third encoder buttons pressed
+        return false;
+  }
+  else //if not pressed , return false
+    return false;
+  //if all tests where OK
+  return true;
 }
