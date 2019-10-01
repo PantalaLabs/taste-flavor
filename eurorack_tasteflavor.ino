@@ -437,6 +437,8 @@ void loop()
   if (flagSelectMood)
   {
     checkDefaultDisplay();
+    for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
+      permanentMute[pat] = 0;
     displayShowPreviousMood();
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
@@ -500,7 +502,7 @@ void loop()
   //if new mood was selected....copy reference tables or create new mood in the morph area
   if (oneEncoderButtonPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
-    interfaceEvent.debounce(200); //block any other interface event
+    interfaceEvent.debounce(1000); //block any other interface event
     flagSelectMood = true;
   }
 
@@ -550,13 +552,15 @@ void loop()
     //check if any pattern should be permanently muted
     //if any Action pressed and morph encoder modifier pressed and respective modifier pressed and interface debounced to avoid multiple taps
     if (instrActionState[i] && twoEncoderButtonsPressed(MORPHENCODER, i + 2) && interfaceEvent.debounced())
+    {
       permanentMute[i] = !permanentMute[i];
-
+      interfaceEvent.debounce(1000);
+    }
     //check if any pattern should be erased
     //if any Action pressed and morph encoder modifier pressed and interface debounced to avoid multiple taps
     else if (instrActionState[i] && oneEncoderButtonPressed(MORPHENCODER) && interfaceEvent.debounced())
     {
-      interfaceEvent.debounce(400);
+      interfaceEvent.debounce(1000);
       flagEraseInstrumentPattern = i;
     }
 
