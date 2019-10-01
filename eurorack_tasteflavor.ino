@@ -226,7 +226,7 @@ uint8_t morphArea[2][2 * MAXINSTRUMENTS];
 boolean ramPatterns[2][6][MAXSTEPS];
 #define RAM 0
 #define ROM 1
-#define MAXUNDOS 20
+#define MAXUNDOS MAXSTEPS
 int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
 
 // #define MAXLOFIKICK 11
@@ -569,7 +569,7 @@ void loop()
     //morph encoder + instrument modifier + action button + custom pattern
     else if (twoEncoderButtonsPressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
     {
-      interfaceEvent.debounce(250);
+      interfaceEvent.debounce(200);
       flagRollbackInstrumentTap = i;
     }
 
