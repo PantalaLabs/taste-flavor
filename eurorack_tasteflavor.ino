@@ -64,8 +64,8 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define MAXINSTR4PATTERNS 27
 #define MAXINSTR5PATTERNS 27
 #define MAXINSTR6PATTERNS 19
-#define DOTGRIDINIT 27
-#define GRIDDOTHEIGHT 5
+#define DOTGRIDINIT 36
+#define GRIDPATTERNHEIGHT 4
 #define BKPPATTERN 0
 
 //PINS
@@ -163,7 +163,6 @@ Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
 Counter morphingInstrument(MAXINSTRUMENTS);
-
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
@@ -182,38 +181,18 @@ int8_t flagNextRomPatternTablePointer = -1;
 int8_t flagUpdateSampleNumber = -1;
 int8_t flagEraseInstrumentPattern = -1;
 int8_t flagTapInstrumentPattern = -1;
+int8_t flagRollbackInstrumentTap = -1;
 int8_t flagTapStep = -1;
 boolean defaultDisplayNotActiveYet = true;
 
 #include "patterns.h"
 //byte *romPatternPoniter[6] = {&romPatternInstr1, &romPatternInstr5, &romPatternInstr5, &romPatternInstr5, &romPatternInstr5, &romPatternInstr6};
-
 uint8_t flagBKPdPatternFrom[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+boolean flagCustomPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //MOOD===================================================================================================================
-//{name , action} action 0=mood switch / 1=mood command
 #define MAXMOODS 5 //max moods
 String moodKitName[MAXMOODS] = {"", "4x4 mood 1", "4x4 mood 2", "4x4 mood 3", "4x4 mood 4"};
-
-// {"4x4 mood 5"},
-// {"4x4 mood 6"},
-// {"Mood9"},
-// {"Mood10"},
-// {"Mood11"},
-// {"Mood12"},
-// {"Mood13"},
-// {"mood14"},
-// {"Import 1"},
-// {"Import 1"},
-// {"Import 2"},
-// {"Import 3"},
-// {"Import 4"},
-// {"Import 1"},
-// {"Import 2"},
-// {"Import 3"},
-// {"Add more Hats 1"}
-// {"Lofi bass"}},
-// {"Lofi hat"}};
 
 //SAMPLES + PATTERN
 int8_t moodKitPresetPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
@@ -243,11 +222,12 @@ int8_t moodKitPresetPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
 // {-1, -1, -1, -1, 6, -1}, {15, 24, 25, 0, 0, 0},
 
 //MORPH 6 pointer samples + 6 pointer patterns / 0=morph area 0 / 1=morph area 1
-uint8_t morphArea[2][2 * MAXINSTRUMENTS] = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-                                            {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+uint8_t morphArea[2][2 * MAXINSTRUMENTS];
 boolean ramPatterns[2][6][MAXSTEPS];
 #define RAM 0
 #define ROM 1
+#define MAXUNDOS 20
+int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
 
 // #define MAXLOFIKICK 11
 // uint8_t lofiKick[MAXLOFIKICK] = {0, 3, 4, 12, 17, 23, 25, 42, 43, 44, 45};
@@ -263,7 +243,7 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
 void checkDefaultDisplay();
 void Displaywelcome();
-void displayShowMood();
+void displayShowBrowsedMood();
 void displayShowMorphBar(int8_t _size);
 void DisplayshowSampleOrPatternNumber(boolean _smp, int8_t _val);
 void displayBlackInstrumentPattern(uint8_t _instr);
@@ -273,8 +253,10 @@ void endTriggers();
 boolean oneEncoderButtonPressed(uint8_t target);
 boolean twoEncoderButtonsPressed(uint8_t target1, uint8_t target2);
 void clearInstrumentRam1Pattern(uint8_t _instr);
-void saveStepIntoRamPattern(uint8_t _instr, uint8_t _step);
-void saveStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step);
+void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
+void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
+void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
+void rollbackStepIntoUndoArray(uint8_t _instr);
 void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer);
 void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source);
 void copyRamPattern1ToRam0(uint8_t _instr);
@@ -315,6 +297,14 @@ void setup()
     drumKitSamplePlaying[i]->setCyclable(false);
   }
   morphingInstrument.setCyclable(false);
+
+  for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+      undoStack[undos][instr] = -1;
+
+  for (uint8_t morph = 0; morph < 2; morph++)
+    for (uint8_t instr = 0; instr < (2 * MAXINSTRUMENTS); instr++)
+      morphArea[morph][instr] = 0;
 
   for (uint8_t morph = 0; morph < 2; morph++)
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
@@ -403,13 +393,13 @@ void loop()
   if (flagBrowseMood)
   {
     checkDefaultDisplay();
-    displayShowMood();
+    displayShowBrowsedMood();
     flagBrowseMood = false;
     flagUpdateDisplay = true;
   }
 
   //update morph bar changes
-  if (flagUpdateMorph != 0)
+  else if (flagUpdateMorph != 0)
   {
     //if CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
     if (flagUpdateMorph == 1)
@@ -434,14 +424,17 @@ void loop()
   }
 
   //copy selected mood to morph area
-  if (flagSelectMood)
+  else if (flagSelectMood)
   {
     checkDefaultDisplay();
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
       permanentMute[pat] = 0;
     displayShowPreviousMood();
+    displayShowSelectedMood();
+
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
+      flagCustomPattern[pat] = 0;        //reset all custom patterns flag
       if (flagBKPdPatternFrom[pat] != 0) //if any pattern was changed , restore it from bkp before do anything
       {
         copyRomPatternToRomPattern(pat, BKPPATTERN, flagBKPdPatternFrom[pat]); //copy BKPd pattern to its original place
@@ -481,7 +474,7 @@ void loop()
   }
 
   //if only one intrument pattern changed
-  if (flagUpdateThisInstrPattern != -1)
+  else if (flagUpdateThisInstrPattern != -1)
   {
     copyRomPatternToRam1(flagUpdateThisInstrPattern, flagNextRomPatternTablePointer);
     displayShowInstrumPattern(flagUpdateThisInstrPattern, RAM);
@@ -492,22 +485,15 @@ void loop()
   }
 
   //if sampler changed
-  if (flagUpdateSampleNumber != -1)
+  else if (flagUpdateSampleNumber != -1)
   {
     DisplayshowSampleOrPatternNumber(true, flagUpdateSampleNumber);
     flagUpdateDisplay = true;
     flagUpdateSampleNumber = -1;
   }
 
-  //if new mood was selected....copy reference tables or create new mood in the morph area
-  if (oneEncoderButtonPressed(ENCBUTMOOD) && interfaceEvent.debounced())
-  {
-    interfaceEvent.debounce(1000); //block any other interface event
-    flagSelectMood = true;
-  }
-
   //if some pattern should be erased
-  if (flagEraseInstrumentPattern != -1)
+  else if (flagEraseInstrumentPattern != -1)
   {
     displayBlackInstrumentPattern(flagEraseInstrumentPattern);                                                                         //clear pattern from display
     copyRomPatternToRomPattern(flagEraseInstrumentPattern, drumKitPatternPlaying[flagEraseInstrumentPattern]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
@@ -520,7 +506,7 @@ void loop()
     flagBKPdPatternFrom[flagEraseInstrumentPattern] = flagEraseInstrumentPattern;
   }
   //if step should be tapped
-  if (flagTapInstrumentPattern != -1)
+  else if (flagTapInstrumentPattern != -1)
   {
     //if this pattern isnt bkp´d yet
     if (flagBKPdPatternFrom[flagTapInstrumentPattern] == 0)
@@ -528,13 +514,28 @@ void loop()
       copyRomPatternToRomPattern(flagTapInstrumentPattern, drumKitPatternPlaying[flagTapInstrumentPattern]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
       flagBKPdPatternFrom[flagTapInstrumentPattern] = flagTapInstrumentPattern;
     }
-    saveStepIntoRomPattern(flagTapInstrumentPattern, drumKitPatternPlaying[flagTapInstrumentPattern]->getValue(), flagTapStep); //insert new step into Rom pattern
-    saveStepIntoRamPattern(flagTapInstrumentPattern, flagTapStep);                                                              //insert new step into Ram 1 pattern
-    displayShowInstrumPattern(flagTapInstrumentPattern, RAM);                                                                   //update display with new inserted step
+    setStepIntoRomPattern(flagTapInstrumentPattern, drumKitPatternPlaying[flagTapInstrumentPattern]->getValue(), flagTapStep, 1); //insert new step into Rom pattern
+    setStepIntoRamPattern(flagTapInstrumentPattern, flagTapStep, 1);                                                              //insert new step into Ram 1 pattern
+    setStepIntoUndoArray(flagTapInstrumentPattern, flagTapStep);
+    setThisPatternAsCustom(flagTapInstrumentPattern);
+    displayShowInstrumPattern(flagTapInstrumentPattern, RAM); //update display with new inserted step
     flagUpdateDisplay = true;
     flagTapInstrumentPattern = -1;
     flagTapStep = -1;
   }
+  else if (flagRollbackInstrumentTap != -1)
+  {
+    if (undoStack[0][flagRollbackInstrumentTap] != -1)
+    {
+      setStepIntoRomPattern(flagRollbackInstrumentTap, drumKitPatternPlaying[flagRollbackInstrumentTap]->getValue(), undoStack[0][flagRollbackInstrumentTap], 0); //insert new step into Rom pattern
+      setStepIntoRamPattern(flagRollbackInstrumentTap, undoStack[0][flagRollbackInstrumentTap], 0);                                                               //insert new step into Ram 1 pattern
+      rollbackStepIntoUndoArray(flagRollbackInstrumentTap);                                                                                                       //rollback the last saved step
+      displayShowInstrumPattern(flagRollbackInstrumentTap, RAM);                                                                                                  //update display with new inserted step
+      flagUpdateDisplay = true;
+      flagRollbackInstrumentTap = -1;
+    }
+  }
+
   //if any Display update
   if (flagUpdateDisplay)
     display.display();
@@ -544,29 +545,45 @@ void loop()
   for (int8_t i = 0; i < MAXENCODERS; i++)
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
 
-  //read all action buttons (internally invert boolean state to make easy future comparation)
+  //if new mood was selected....copy reference tables or create new mood in the morph area
+  if (oneEncoderButtonPressed(ENCBUTMOOD) && interfaceEvent.debounced())
+  {
+    interfaceEvent.debounce(1000); //block any other interface event
+    flagSelectMood = true;
+  }
+
+  //read all action buttons (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
 
-    //check if any pattern should be permanently muted
-    //if any Action pressed and morph encoder modifier pressed and respective modifier pressed and interface debounced to avoid multiple taps
-    if (instrActionState[i] && twoEncoderButtonsPressed(MORPHENCODER, i + 2) && interfaceEvent.debounced())
-    {
-      permanentMute[i] = !permanentMute[i];
-      interfaceEvent.debounce(1000);
-    }
-    //check if any pattern should be erased
-    //if any Action pressed and morph encoder modifier pressed and interface debounced to avoid multiple taps
-    else if (instrActionState[i] && oneEncoderButtonPressed(MORPHENCODER) && interfaceEvent.debounced())
+    //if any pattern should be erased
+    //morph encoder + instrument modifier + action button + not custom pattern
+    if (twoEncoderButtonsPressed(MORPHENCODER, i + 2) && instrActionState[i] && !flagCustomPattern[i] && interfaceEvent.debounced())
     {
       interfaceEvent.debounce(1000);
       flagEraseInstrumentPattern = i;
     }
 
-    //check if any pattern should be tapped
-    //if any Action pressed and respective modifier pressed and interface debounced to avoid multiple taps
-    else if (instrActionState[i] && oneEncoderButtonPressed(i + 2) && interfaceEvent.debounced())
+    //if any tap should be rollbacked
+    //morph encoder + instrument modifier + action button + custom pattern
+    else if (twoEncoderButtonsPressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
+    {
+      interfaceEvent.debounce(250);
+      flagRollbackInstrumentTap = i;
+    }
+
+    //if any pattern should be permanently muted
+    //morph encoder + action button
+    else if (oneEncoderButtonPressed(MORPHENCODER) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      permanentMute[i] = !permanentMute[i];
+      interfaceEvent.debounce(1000);
+    }
+
+    //if any pattern should be tapped
+    //one instrument modifier + action button
+    else if (oneEncoderButtonPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
     {
       if (millis() < (lastTick + (tickInterval >> 1))) //if we are still in the last step
       {
@@ -675,10 +692,6 @@ void readEncoder(uint8_t _queued)
       }
       break;
     }
-    //if DOUBLE modifier pressed , CHANGE anything else
-    // if (encoderButtonState[ENCBUTINSTR1] && encoderButtonState[ENCBUTINSTR2])
-    // {
-    // }
   }
 }
 
@@ -690,7 +703,7 @@ void checkDefaultDisplay()
     defaultDisplayNotActiveYet = false;
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    displayShowMood();
+    displayShowBrowsedMood();
     displayShowMorphBar(-1);
   }
 }
@@ -733,12 +746,19 @@ void displayShowPreviousMood()
   display.setCursor(0, TEXTLINE_HEIGHT);    //set cursor position
   display.print(moodKitName[previousMood]); //print previous mood name
 }
-
-void displayShowMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+void displayShowSelectedMood()
 {
   display.fillRect(0, 2 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
   display.setTextColor(WHITE);
-  display.setCursor(0, 2 * TEXTLINE_HEIGHT);              //set cursor position
+  display.setCursor(0, 2 * TEXTLINE_HEIGHT); //set cursor position
+  display.print(moodKitName[selectedMood]);  //print selected mood name
+}
+
+void displayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+{
+  display.fillRect(0, 3 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 3 * TEXTLINE_HEIGHT);              //set cursor position
   display.print(moodKitName[selectedMood]);               //print mood name
   for (int8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
     displayShowInstrumPattern(instr, ROM);
@@ -792,14 +812,14 @@ void displayShowInstrumPattern(uint8_t _instr, boolean _source)
       }
     }
     if (mustPrintStep)
-      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDDOTHEIGHT), 2, GRIDDOTHEIGHT - 1, WHITE);
+      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }
 
 //erase exatctly one line pattern
 void displayBlackInstrumentPattern(uint8_t _instr)
 {
-  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDDOTHEIGHT), Display_WIDTH, GRIDDOTHEIGHT - 1, BLACK);
+  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), Display_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
@@ -845,25 +865,44 @@ void clearInstrumentRam1Pattern(uint8_t _instr)
 }
 
 //save tapped step into respective rom table
-void saveStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step)
+void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
 {
   if (_instr == KICKCHANNEL)
-    romPatternInstr1[_pattern][_step] = 1;
+    romPatternInstr1[_pattern][_step] = _val;
   else if (_instr == SNAKERCHANNEL)
-    romPatternInstr2[_pattern][_step] = 1;
+    romPatternInstr2[_pattern][_step] = _val;
   else if (_instr == CLAPCHANNEL)
-    romPatternInstr3[_pattern][_step] = 1;
+    romPatternInstr3[_pattern][_step] = _val;
   else if (_instr == HATCHANNEL)
-    romPatternInstr4[_pattern][_step] = 1;
+    romPatternInstr4[_pattern][_step] = _val;
   else if (_instr == OHHRIDECHANNEL)
-    romPatternInstr5[_pattern][_step] = 1;
+    romPatternInstr5[_pattern][_step] = _val;
   else
-    romPatternInstr6[_pattern][_step] = 1;
+    romPatternInstr6[_pattern][_step] = _val;
 }
 
-void saveStepIntoRamPattern(uint8_t _instr, uint8_t _step)
+void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
 {
-  ramPatterns[1][_instr][_step] = 1; //save tapped step
+  ramPatterns[1][_instr][_step] = _val; //save tapped step
+}
+
+void setStepIntoUndoArray(uint8_t _instr, uint8_t _step)
+{
+  for (uint8_t i = (MAXUNDOS - 1); i > 0; i--)
+    undoStack[i][_instr] = undoStack[i - 1][_instr]; //move all values ahead to open space on stack
+  undoStack[0][_instr] = _step;
+}
+
+void setThisPatternAsCustom(uint8_t _instr)
+{
+  flagCustomPattern[_instr] = 1;
+}
+
+void rollbackStepIntoUndoArray(uint8_t _instr)
+{
+  for (uint8_t i = 0; i < (MAXUNDOS - 1); i++)
+    undoStack[i][_instr] = undoStack[i + 1][_instr]; //move all values ahead to open space on stack
+  undoStack[(MAXUNDOS - 1)][_instr] = -1;
 }
 
 uint8_t lastCopied_instr;
