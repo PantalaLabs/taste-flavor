@@ -28,6 +28,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 
 #include <PantalaDefines.h>
 #include <EventDebounce.h>
+//#include <DigitalInput.h>
 #include <Counter.h>
 #include <Rotary.h>
 #include <DueTimer.h>
@@ -51,7 +52,6 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define MIDICHANNEL 1    //standart drum midi channel
 #define MOODMIDINOTE 20  //midi note to mood message
 #define MORPHMIDINOTE 21 //midi note to morph message
-#define PATTERNTOPINIT 17
 #define KICKCHANNEL 0
 #define SNAKERCHANNEL 1 //snare + shaker
 #define CLAPCHANNEL 2
@@ -64,7 +64,8 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define MAXINSTR4PATTERNS 27
 #define MAXINSTR5PATTERNS 27
 #define MAXINSTR6PATTERNS 19
-#define DOTHEIGHT 7
+#define DOTGRIDINIT 27
+#define GRIDDOTHEIGHT 5
 #define BKPPATTERN 0
 
 //PINS
@@ -129,9 +130,9 @@ uint8_t sampleButtonModifier[MAXINSTRUMENTS] = {ENCBUTINSTR2, ENCBUTINSTR1, ENCB
 
 boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
-//action buttons
 uint8_t instrActionPins[MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
 boolean instrActionState[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+boolean permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //playing instrument pattern pointer
 Counter instr1patternPointer(MAXINSTR1PATTERNS - 1);
@@ -171,6 +172,7 @@ boolean flagUpdateStepLenght = false;
 
 int16_t selectedMood = 0;
 int16_t lastSelectedMood = 255;      //prevents to execute 2 times the same action
+int8_t previousMood = 0;             //previous mood name
 int8_t lastMorphBarGraphValue = 127; //0 to MAXINSTRUMENTS possible values
 boolean flagBrowseMood = false;      //schedule some Display update
 int8_t flagUpdateMorph = 0;          //schedule some Display update
@@ -261,14 +263,15 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
 void checkDefaultDisplay();
 void Displaywelcome();
-void DisplayshowMood();
-void DisplayshowMorphBar(int8_t _size);
+void displayShowMood();
+void displayShowMorphBar(int8_t _size);
 void DisplayshowSampleOrPatternNumber(boolean _smp, int8_t _val);
 void displayBlackInstrumentPattern(uint8_t _instr);
 void displayShowInstrumPattern(uint8_t _instr, boolean _source);
+void displayShowPreviousMood();
 void endTriggers();
-boolean onlyOneEncoderButtonTrue(uint8_t target);
-boolean onlyTwoEncoderButtonTrue(uint8_t target1, uint8_t target2);
+boolean oneEncoderButtonPressed(uint8_t target);
+boolean twoEncoderButtonsPressed(uint8_t target1, uint8_t target2);
 void clearInstrumentRam1Pattern(uint8_t _instr);
 void saveStepIntoRamPattern(uint8_t _instr, uint8_t _step);
 void saveStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step);
@@ -350,13 +353,14 @@ void ISRtriggerIn()
   Timer3.attachInterrupt(endTriggers);
   tickInterval = millis() - lastTick;
   lastTick = millis();
-  playMidiValue = 0;                                                                                //calculate final noteVelocity
-  for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)                                          //for each instrument
-  {                                                                                                 //if it is not Actiond
-    uint8_t chooseMorphedOrNot = 0;                                                                 //force point to morph area 0
-    if ((morphingInstrument.getValue() - 1) >= instr)                                               //if instrument already morphed
-      chooseMorphedOrNot = 1;                                                                       // point to RAM area 1
-    if (!instrActionState[instr] && ramPatterns[chooseMorphedOrNot][instr][stepCounter.getValue()]) //if not Actiond and valid step
+  playMidiValue = 0;                                       //calculate final noteVelocity
+  for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
+  {                                                        //if it is not Actiond
+    uint8_t chooseMorphedOrNot = 0;                        //force point to morph area 0
+    if ((morphingInstrument.getValue() - 1) >= instr)      //if instrument already morphed
+      chooseMorphedOrNot = 1;                              // point to RAM area 1
+    //if not permanently muted and not momentary muted and it is a valid step
+    if (!permanentMute[instr] && !instrActionState[instr] && ramPatterns[chooseMorphedOrNot][instr][stepCounter.getValue()])
     {
       playMidiValue = playMidiValue + powint(2, 5 - instr);
       digitalWrite(triggerPins[instr], HIGH);
@@ -399,7 +403,7 @@ void loop()
   if (flagBrowseMood)
   {
     checkDefaultDisplay();
-    DisplayshowMood();
+    displayShowMood();
     flagBrowseMood = false;
     flagUpdateDisplay = true;
   }
@@ -424,7 +428,7 @@ void loop()
       morphingInstrument.reward();                                                                                                                        //point to previous available instrument, until the first one
     }
     checkDefaultDisplay();
-    DisplayshowMorphBar(morphingInstrument.getValue());
+    displayShowMorphBar(morphingInstrument.getValue());
     flagUpdateMorph = 0;
     flagUpdateDisplay = true;
   }
@@ -433,6 +437,7 @@ void loop()
   if (flagSelectMood)
   {
     checkDefaultDisplay();
+    displayShowPreviousMood();
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
       if (flagBKPdPatternFrom[pat] != 0) //if any pattern was changed , restore it from bkp before do anything
@@ -466,7 +471,8 @@ void loop()
         copyRamPattern0ToRam1(i);                                            //copy IN USE ramPattern area 0 to ramPattern area 1
       }
     }
-    DisplayshowMorphBar(-1);
+    previousMood = selectedMood;
+    displayShowMorphBar(-1);
     morphingInstrument.setValue(0);
     flagSelectMood = false;
     flagUpdateDisplay = true;
@@ -492,7 +498,7 @@ void loop()
   }
 
   //if new mood was selected....copy reference tables or create new mood in the morph area
-  if (onlyOneEncoderButtonTrue(ENCBUTMOOD) && interfaceEvent.debounced())
+  if (oneEncoderButtonPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(200); //block any other interface event
     flagSelectMood = true;
@@ -536,14 +542,19 @@ void loop()
   for (int8_t i = 0; i < MAXENCODERS; i++)
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
 
-  //read all action buttons (invert boolean state to make easy future comparation)
+  //read all action buttons (internally invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
 
+    //check if any pattern should be permanently muted
+    //if any Action pressed and morph encoder modifier pressed and respective modifier pressed and interface debounced to avoid multiple taps
+    if (instrActionState[i] && twoEncoderButtonsPressed(MORPHENCODER, i + 2) && interfaceEvent.debounced())
+      permanentMute[i] = !permanentMute[i];
+
     //check if any pattern should be erased
     //if any Action pressed and morph encoder modifier pressed and interface debounced to avoid multiple taps
-    if (instrActionState[i] && onlyOneEncoderButtonTrue(MORPHENCODER) && interfaceEvent.debounced())
+    else if (instrActionState[i] && oneEncoderButtonPressed(MORPHENCODER) && interfaceEvent.debounced())
     {
       interfaceEvent.debounce(400);
       flagEraseInstrumentPattern = i;
@@ -551,7 +562,7 @@ void loop()
 
     //check if any pattern should be tapped
     //if any Action pressed and respective modifier pressed and interface debounced to avoid multiple taps
-    if (instrActionState[i] && onlyOneEncoderButtonTrue(i + 2) && interfaceEvent.debounced())
+    else if (instrActionState[i] && oneEncoderButtonPressed(i + 2) && interfaceEvent.debounced())
     {
       if (millis() < (lastTick + (tickInterval >> 1))) //if we are still in the last step
       {
@@ -608,7 +619,7 @@ void readEncoder(uint8_t _queued)
 
     case MORPHENCODER:
       //if morph button is pressed and MORPH rotate CHANGE BPM
-      if (onlyOneEncoderButtonTrue(ENCBUTMORPH))
+      if (oneEncoderButtonPressed(ENCBUTMORPH))
       {
         flagUpdateStepLenght = true;
         stepLenght += -(encoderChange * 1000);
@@ -633,7 +644,7 @@ void readEncoder(uint8_t _queued)
     default:
       uint8_t _instrum = _queued - 2;
       //if only one modifier pressed , change SAMPLE, schedule to change on Display too
-      if (onlyOneEncoderButtonTrue(sampleButtonModifier[_instrum]))
+      if (oneEncoderButtonPressed(sampleButtonModifier[_instrum]))
       {
         if (encoderChange == -1)
           drumKitSamplePlaying[_instrum]->reward();
@@ -675,8 +686,8 @@ void checkDefaultDisplay()
     defaultDisplayNotActiveYet = false;
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    DisplayshowMood();
-    DisplayshowMorphBar(-1);
+    displayShowMood();
+    displayShowMorphBar(-1);
   }
 }
 
@@ -688,7 +699,7 @@ void Displaywelcome()
   display.println(F("    and morph it -->"));
 }
 
-void DisplayshowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 pixels each
+void displayShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 pixels each
 {
   if (lastMorphBarGraphValue != _size)
   {
@@ -705,21 +716,25 @@ void DisplayshowSampleOrPatternNumber(boolean _smp, int8_t _val) //update Displa
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
   if (_smp)
-  {
     display.print("smp:");
-  }
   else
-  {
     display.print("pat:");
-  }
   display.print(_val);
 }
 
-void DisplayshowMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+void displayShowPreviousMood()
 {
-  display.setTextColor(WHITE);
   display.fillRect(0, TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
-  display.setCursor(0, TEXTLINE_HEIGHT);                  //set cursor position
+  display.setTextColor(WHITE);
+  display.setCursor(0, TEXTLINE_HEIGHT);    //set cursor position
+  display.print(moodKitName[previousMood]); //print previous mood name
+}
+
+void displayShowMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+{
+  display.fillRect(0, 2 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 2 * TEXTLINE_HEIGHT);              //set cursor position
   display.print(moodKitName[selectedMood]);               //print mood name
   for (int8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
     displayShowInstrumPattern(instr, ROM);
@@ -773,14 +788,14 @@ void displayShowInstrumPattern(uint8_t _instr, boolean _source)
       }
     }
     if (mustPrintStep)
-      display.fillRect(step * 2, PATTERNTOPINIT + (_instr * DOTHEIGHT), 2, DOTHEIGHT - 1, WHITE);
+      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDDOTHEIGHT), 2, GRIDDOTHEIGHT - 1, WHITE);
   }
 }
 
 //erase exatctly one line pattern
 void displayBlackInstrumentPattern(uint8_t _instr)
 {
-  display.fillRect(0, PATTERNTOPINIT + (_instr * DOTHEIGHT), Display_WIDTH, DOTHEIGHT - 1, BLACK);
+  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDDOTHEIGHT), Display_WIDTH, GRIDDOTHEIGHT - 1, BLACK);
 }
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
@@ -789,7 +804,7 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 }
 
 //verify if ONLY ONE encoder button is pressed
-boolean onlyOneEncoderButtonTrue(uint8_t target)
+boolean oneEncoderButtonPressed(uint8_t target)
 {
   if (encoderButtonState[target]) //if asked button is pressed
   {
@@ -804,7 +819,7 @@ boolean onlyOneEncoderButtonTrue(uint8_t target)
 }
 
 //verify if TWO encoder button is pressed
-boolean onlyTwoEncoderButtonTrue(uint8_t target1, uint8_t target2)
+boolean twoEncoderButtonsPressed(uint8_t target1, uint8_t target2)
 {
   if (encoderButtonState[target1] && encoderButtonState[target2]) //if two asked buttons are pressed
   {
