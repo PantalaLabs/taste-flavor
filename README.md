@@ -17,4 +17,11 @@ Allows samples and patterns from each individual track to be exchanged for sampl
 Allows you to edit each pattern using the Tap on each track.
 Allows you to Undo the Tap sequence if you miss some step.
 And finally, Morph's manual command that transitions track by track from one Mood to another. This is the biggest feature that guarantees the idea of "fluid dynamics."
-The project has 80% of the technology implemented and is already able to carry out all the tasks cited in the initial scope. Now entering the testing phase, improvements, new ideas and life cycle assessment.
+
+
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+<img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a>
+<br /><span xmlns:dct="http://purl.org/dc/terms/" property="dct:title">Taste&Flavor</span> by Gibran Curtiss Salomão from 
+<a xmlns:cc="http://creativecommons.org/ns#" href="https://facebook.com/pantalalabs/" property="cc:attributionName" 
+rel="cc:attributionURL">Pantala Labs</a> is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">
+Creative Commons Attribution-ShareAlike 4.0 International License</a>.
