@@ -21,15 +21,23 @@ Data flow diagram
                                                  ramPatterns
 */
 
-#define DO_SERIAL true
+#define DO_SERIAL false
+#define DO_MIDIUSB false
+#define DO_MIDIHW true
 
+#ifdef DO_MIDIHW
 #include <MIDI.h>
 MIDI_CREATE_DEFAULT_INSTANCE();
+#endif
+
+#ifdef DO_MIDIUSB
+#include "MIDIUSB.h"
+#endif
 
 #include <PantalaDefines.h>
 #include <EventDebounce.h>
-//#include <DigitalInput.h>
 #include <Counter.h>
+//#include <Trigger.h>
 #include <Rotary.h>
 #include <DueTimer.h>
 
@@ -117,12 +125,23 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define ENCBUTINSTR5 6
 #define ENCBUTINSTR6 7
 
-uint32_t lastTick;
-uint32_t tickInterval;
+uint32_t u_lastTick;                 //last time tick was called
+uint32_t u_tickInterval = 1000000;   //tick interval
+boolean flagUpdateTimeShift = false; //flag to update time shift
+int32_t u_timeShift = 1100;          //default time shift keep the 100 microsseconds there
+int32_t u_timeShiftStep = 1000;      //time shift amount update step
+#define u_timeShiftLimit 20000       //time shift + and - limit
+
+uint16_t bpm = 125;
+uint32_t u_bpm = 0;
 EventDebounce interfaceEvent(200); //min time in ms to accept another interface event
 
 uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
 uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
+
+// Trigger trigger1(TRIGOUTPIN1);
+// Trigger trigger2(TRIGOUTPIN2);
+
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
 //encoders buttons : mood, morph, instruments
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINMORPH, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
@@ -166,8 +185,7 @@ Counter morphingInstrument(MAXINSTRUMENTS);
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
-volatile boolean flagAdvanceStepCounter = false;
-boolean flagUpdateStepLenght = false;
+boolean flagUpdateBpm = false;
 
 int16_t selectedMood = 0;
 int16_t lastSelectedMood = 255;      //prevents to execute 2 times the same action
@@ -233,19 +251,19 @@ int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
 // uint8_t lofiKick[MAXLOFIKICK] = {0, 3, 4, 12, 17, 23, 25, 42, 43, 44, 45};
 // #define MAXLOFIHAT 10
 // uint8_t lofiHihat[MAXLOFIHAT] = {6, 16, 17, 22, 24, 33, 42, 50, 53, 62};
-uint32_t stepLenght = 125000;
 boolean flagModifierPressed = false;
 
 volatile uint8_t playMidiValue = 0;
 
-void ISRtriggerIn();
+void ISRfireTimer3();
+void ISRfireTimer4();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
 void checkDefaultDisplay();
-void Displaywelcome();
+void displayWelcome();
 void displayShowBrowsedMood();
 void displayShowMorphBar(int8_t _size);
-void DisplayshowSampleOrPatternNumber(boolean _smp, int8_t _val);
+void displayShowInfo(uint8_t _smp, int16_t _val);
 void displayBlackInstrumentPattern(uint8_t _instr);
 void displayShowInstrumPattern(uint8_t _instr, boolean _source);
 void displayShowPreviousMood();
@@ -256,6 +274,7 @@ void clearInstrumentRam1Pattern(uint8_t _instr);
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
 void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
+void setThisPatternAsCustom(uint8_t _instr);
 void rollbackStepIntoUndoArray(uint8_t _instr);
 void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer);
 void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source);
@@ -264,7 +283,9 @@ void copyRamPattern0ToRam1(uint8_t _instr);
 
 void setup()
 {
+#ifdef DO_MIDIHW
   MIDI.begin();
+#endif
 
 #ifdef DO_SERIAL
   Serial.begin(9600);
@@ -272,7 +293,7 @@ void setup()
 #endif
 
   //pinMode(TRIGGERINPIN, INPUT);
-  //triggerIn.attachCallOnRising(ISRtriggerIn);
+  //triggerIn.attachCallOnRising(ISRfireTimer3);
 
   //start all encoders
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -329,20 +350,44 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.display();
   delay(2000);
-  Displaywelcome();
+  displayWelcome();
   display.display();
 
   //internal clock
-  Timer4.start(stepLenght);
-  Timer4.attachInterrupt(ISRtriggerIn);
+  u_bpm = bpm2micros4ppqn(bpm);
+  Timer3.attachInterrupt(ISRfireTimer3);
+  Timer3.start(u_bpm);
 }
 
-void ISRtriggerIn()
+//base clock
+void ISRfireTimer3()
 {
-  Timer3.start(5000); //start 5ms triggers timers
-  Timer3.attachInterrupt(endTriggers);
-  tickInterval = millis() - lastTick;
-  lastTick = millis();
+  Timer3.stop();
+  u_tickInterval = micros() - u_lastTick;
+  u_lastTick = micros();
+  if (u_timeShift >= 0)
+  {
+    Timer4.start(u_timeShift);
+    Timer4.attachInterrupt(ISRfireTimer4);
+  }
+  else
+  {
+    Timer4.start(u_tickInterval + u_timeShift);
+    Timer4.attachInterrupt(ISRfireTimer4);
+  }
+  Timer3.start(bpm2micros4ppqn(bpm));
+  //trigger1.start();
+}
+
+//shifted clock and everything step sequence related
+void ISRfireTimer4()
+{
+  Timer5.attachInterrupt(endTriggers); //trigger end timer
+  Timer5.start(5000);                  //start 5ms triggers timers
+  Timer4.stop();                       //stop timer shift
+  Timer4.detachInterrupt();            //detach procedure
+
+  //trigger2.start();
   playMidiValue = 0;                                       //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {                                                        //if it is not Actiond
@@ -356,38 +401,34 @@ void ISRtriggerIn()
       digitalWrite(triggerPins[instr], HIGH);
     }
   }
-  flagAdvanceStepCounter = true; //flags to point step counter to next step
+  stepCounter.advance();
 }
 
 void loop()
 {
+  // trigger1.compute();
+  // trigger2.compute();
   if (playMidiValue != 0)
   {
     playMidi(1, playMidiValue, MIDICHANNEL); //send midinote with binary coded triggers message
     playMidiValue = 0;
   }
 
-  //step counter advance ===============================================================
-  //if its time to advance step counter pointer and adjust BPM if necessary
-  if (flagAdvanceStepCounter)
-  {
-    if (flagUpdateStepLenght)
-    {
-      flagUpdateStepLenght = false;
-      Timer4.start(stepLenght);
-    }
-    stepCounter.advance();
-    flagAdvanceStepCounter = false;
-  }
-
-  //check for all Display updates ===============================================================
-
   //flags if any Display update will be necessary in this cycle
   boolean flagUpdateDisplay = false;
+
+  if (flagUpdateBpm)
+  {
+    flagUpdateBpm = false;
+    displayShowInfo(2, bpm);
+    flagUpdateDisplay = true;
+  }
 
   //read all processed encoders interruptions
   for (uint8_t i = 0; i < MAXENCODERS; i++)
     readEncoder(i);
+
+  //check for all Display updates ===============================================================
 
   //if new mood was selected
   if (flagBrowseMood)
@@ -478,7 +519,7 @@ void loop()
   {
     copyRomPatternToRam1(flagUpdateThisInstrPattern, flagNextRomPatternTablePointer);
     displayShowInstrumPattern(flagUpdateThisInstrPattern, RAM);
-    DisplayshowSampleOrPatternNumber(false, flagNextRomPatternTablePointer);
+    displayShowInfo(0, flagNextRomPatternTablePointer);
     flagUpdateDisplay = true;
     flagUpdateThisInstrPattern = -1;
     flagNextRomPatternTablePointer = -1;
@@ -487,9 +528,16 @@ void loop()
   //if sampler changed
   else if (flagUpdateSampleNumber != -1)
   {
-    DisplayshowSampleOrPatternNumber(true, flagUpdateSampleNumber);
+    displayShowInfo(1, flagUpdateSampleNumber);
     flagUpdateDisplay = true;
     flagUpdateSampleNumber = -1;
+  }
+  //if time shift changed
+  else if (flagUpdateTimeShift)
+  {
+    displayShowInfo(3, (u_timeShift - 100) / 1000);
+    flagUpdateDisplay = true;
+    flagUpdateTimeShift = false;
   }
 
   //if some pattern should be erased
@@ -585,7 +633,7 @@ void loop()
     //one instrument modifier + action button
     else if (oneEncoderButtonPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
     {
-      if (millis() < (lastTick + (tickInterval >> 1))) //if we are still in the last step
+      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the last step
       {
         stepCounter.reward();
         flagTapStep = stepCounter.getValue();
@@ -597,7 +645,7 @@ void loop()
         flagTapStep = stepCounter.getValue();
         //no need to send midinote to play this instrument because it ill be saved to next step cycle
       }
-      interfaceEvent.debounce(tickInterval);
+      interfaceEvent.debounce(u_tickInterval / 1000);
       flagTapInstrumentPattern = i;
       //code : undo array
     }
@@ -609,8 +657,8 @@ void endTriggers()
 {
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
     digitalWrite(triggerPins[i], LOW);
-  Timer3.stop(); //stops trigger timer
-  Timer3.detachInterrupt();
+  Timer5.stop(); //stops trigger timer
+  Timer5.detachInterrupt();
 }
 
 //read queued encoder status
@@ -639,11 +687,19 @@ void readEncoder(uint8_t _queued)
       break;
 
     case MORPHENCODER:
-      //if morph button is pressed and MORPH rotate CHANGE BPM
-      if (oneEncoderButtonPressed(ENCBUTMORPH))
+      //if morph button AND morph button are pressed and MORPH rotate change timer shift
+      if (twoEncoderButtonsPressed(ENCBUTMOOD, ENCBUTMORPH))
       {
-        flagUpdateStepLenght = true;
-        stepLenght += -(encoderChange * 1000);
+        u_timeShift += encoderChange * u_timeShiftStep;
+        u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
+        flagUpdateTimeShift = true;
+      }
+      //if morph button is pressed and MORPH rotate CHANGE BPM
+      else if (oneEncoderButtonPressed(ENCBUTMORPH))
+      {
+        flagUpdateBpm = true;
+        bpm += encoderChange;
+        u_bpm = bpm2micros4ppqn(bpm);
       }
       else
       { //or else , just a morph change
@@ -708,7 +764,7 @@ void checkDefaultDisplay()
   }
 }
 
-void Displaywelcome()
+void displayWelcome()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -727,15 +783,19 @@ void displayShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 
   }
 }
 
-void DisplayshowSampleOrPatternNumber(boolean _smp, int8_t _val) //update Display right upper corner with the actual sample or pattern number
+void displayShowInfo(uint8_t _smp, int16_t _val) //update Display right upper corner with the actual sample or pattern number
 {
   display.fillRect(70, 0, Display_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
-  if (_smp)
+  if (_smp == 0)
     display.print("smp:");
-  else
+  else if (_smp == 1)
     display.print("pat:");
+  else if (_smp == 2)
+    display.print("bpm:");
+  else if (_smp == 3)
+    display.print("ms:");
   display.print(_val);
 }
 
@@ -824,7 +884,14 @@ void displayBlackInstrumentPattern(uint8_t _instr)
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 {
+#ifdef DO_MIDIHW
   MIDI.sendNoteOn(_note, _velocity, _channel);
+#endif
+
+#ifdef DO_MIDIUSB
+  noteOn(_channel, _note, _velocity); // Channel 0, middle C, normal velocity
+  MidiUSB.flush();
+#endif
 }
 
 //verify if ONLY ONE encoder button is pressed
@@ -965,3 +1032,24 @@ void copyRamPattern0ToRam1(uint8_t _instr)
   for (uint8_t i = 0; i < MAXSTEPS; i++)
     ramPatterns[1][_instr][i] = ramPatterns[0][_instr][i];
 }
+
+#ifdef DO_MIDIUSB
+void noteOn(byte channel, byte pitch, byte velocity)
+{
+  midiEventPacket_t noteOn = {0x09, 0x90 | channel, pitch, velocity};
+  MidiUSB.sendMIDI(noteOn);
+}
+
+void noteOff(byte channel, byte pitch, byte velocity)
+{
+  midiEventPacket_t noteOff = {0x08, 0x80 | channel, pitch, velocity};
+  MidiUSB.sendMIDI(noteOff);
+}
+
+void controlChange(byte channel, byte control, byte value)
+{
+  midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
+  MidiUSB.sendMIDI(event);
+}
+
+#endif
