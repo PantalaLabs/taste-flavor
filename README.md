@@ -14,6 +14,7 @@ clock select                                  x           x         x
 
 ```
 
+```
 FIXED: 
 Music Producer Contributors (alphabetic order):
 -Carlos Pires - Cause Org Records (BRA)
@@ -21,6 +22,7 @@ Music Producer Contributors (alphabetic order):
 -Edu M - DetroitBR (BRA)
 -Fabricio Peçanha - (BRA)
 -Kultra - DetroitBR (BRA)
+```
 
 UPDATES:
 
