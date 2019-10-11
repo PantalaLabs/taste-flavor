@@ -1,5 +1,5 @@
-FIXED: Task manager update:
 ```
+FIXED: Task manager update:
                                              PCB         CODE    PANEL
 relative clock (midi delay compensation)      -           O         -
 pattern reset clock in                        X           X         X
