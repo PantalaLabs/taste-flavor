@@ -16,7 +16,7 @@ clock select                                  x           x         x
 
 ```
 FIXED: 
-Contributing Music Producers (alphabetic order):
+Contributing Music Producers (alphabetical order):
 -Carlos Pires - Cause Org Records (BRA)
 -Cheap Conductor - DetroitBR (BRA)
 -Edu M - DetroitBR (BRA)
