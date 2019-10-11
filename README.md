@@ -1,6 +1,6 @@
-Task manager update:
+FIXED: Task manager update:
 ```
-                                              PCB         CODE    PANEL
+                                             PCB         CODE    PANEL
 relative clock (midi delay compensation)      -           O         -
 pattern reset clock in                        X           X         X
 pattern init clock out                        O           O         x
@@ -13,6 +13,17 @@ change hardware pins                          x           o         -
 clock select                                  x           x         x
 
 ```
+
+FIXED: 
+Music Producer Contributors (alphabetic order):
+-Carlos Pires - Cause Org Records (BRA)
+-Cheap Conductor - DetroitBR (BRA)
+-Edu M - DetroitBR (BRA)
+-Fabricio Peçanha - (BRA)
+-Kultra - DetroitBR (BRA)
+
+UPDATES:
+
 10/08/2019:
 New panel with the 6 knob CV sequencer to integrated with the main step sequencer,
 <img alt="" style="border-width:0" src="painel%200.95.jpg" /></a>
