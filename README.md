@@ -13,6 +13,10 @@ change hardware pins                          x           o         -
 clock select                                  x           x         x
 
 ```
+10/08/2019:
+New panel with the 6 knob CV sequencer to integrated with the main step sequencer,
+<img alt="" style="border-width:0" src="painel%200.95.jpg" /></a>
+
 
 Taste & Flavor is an Eurorack module consisting of a step sequencer coupled to a multiple sample player and a track mixer that aims to fill a major gap in live performances with modular synthesizers allowing you to create a new mood with every percussion change. 
 This mood transition is part of a concept I created called Mood Oriented Instruments. These instruments, in our case the module, must have the ability not only to reproduce sounds on demand, presets, but also, through algorithms, to add some level of intelligence to the final sound composition.
