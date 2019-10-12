@@ -1,5 +1,5 @@
 ```
-FIXED: Task manager update:
+Task manager:
                                              PCB         CODE    PANEL
 relative clock (midi delay compensation)      -           O         -
 pattern reset clock in                        X           X         X
@@ -19,7 +19,6 @@ o done
 ```
 
 ```
-FIXED: 
 Contributing Music Producers (alphabetical order):
 -Carlos Pires - Cause Org Records (BRA)
 -Cheap Conductor - DetroitBR (BRA)
