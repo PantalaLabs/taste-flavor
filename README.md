@@ -27,6 +27,12 @@ Contributing Music Producers (alphabetical order):
 ```
 
 UPDATES:
+10/12/2019:
+-new panel with function buttons to make tweaking easier, USB input and some graphic changes;
+-new schaematic and pcb;
+-new prototype pcb ordered;
+
+<img alt="" style="border-width:0" src="painel%200.980.jpg" /></a>
 
 10/08/2019:
 New panel with the 6 knob CV sequencer to integrated with the main step sequencer,
