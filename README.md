@@ -24,7 +24,6 @@ Contributing Music Producers (alphabetical order):
 -Cheap Conductor - DetroitBR (BRA)
 -Edu M - DetroitBR (BRA)
 -Fabricio Peçanha - (BRA)
--Kultra - DetroitBR (BRA)
 ```
 
 UPDATES:
