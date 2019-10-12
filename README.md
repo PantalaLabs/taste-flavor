@@ -20,10 +20,10 @@ o done
 
 ```
 Contributing Music Producers (alphabetical order):
-<li>Carlos Pires - Cause Org Records (BRA)
-<li>Cheap Conductor - DetroitBR (BRA)
-<li>Edu M - DetroitBR (BRA)
-<li>Fabricio Peçanha - (BRA)
+Carlos Pires - Cause Org Records (BRA)
+Cheap Conductor - DetroitBR (BRA)
+Edu M - DetroitBR (BRA)
+Fabricio Peçanha - (BRA)
 ```
 
 UPDATES:
