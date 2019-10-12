@@ -139,6 +139,12 @@ EventDebounce interfaceEvent(200); //min time in ms to accept another interface 
 uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
 uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
 
+#define MAXGATELENGHTS 8
+#define DEFAULTGATELENGHT 5000
+#define EXTENDEDGATELENGHT 40000
+int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+uint8_t gateLenghtCounter = 0;
+
 // Trigger trigger1(TRIGOUTPIN1);
 // Trigger trigger2(TRIGOUTPIN2);
 
@@ -185,18 +191,18 @@ Counter morphingInstrument(MAXINSTRUMENTS);
 Counter stepCounter(MAXSTEPS - 1);
 Counter encoderQueue(MAXENCODERS - 1);
 
-boolean flagUpdateBpm = false;
-
-int16_t selectedMood = 0;
-int16_t lastSelectedMood = 255;      //prevents to execute 2 times the same action
-int8_t previousMood = 0;             //previous mood name
-int8_t lastMorphBarGraphValue = 127; //0 to MAXINSTRUMENTS possible values
-boolean flagBrowseMood = false;      //schedule some Display update
-int8_t flagUpdateMorph = 0;          //schedule some Display update
-boolean flagSelectMood = false;      //schedule some Display update
-int8_t flagUpdateThisInstrPattern = -1;
-int8_t flagNextRomPatternTablePointer = -1;
-int8_t flagUpdateSampleNumber = -1;
+boolean flagBrowseMood = false;             //schedule some Display update
+boolean flagSelectMood = false;             //schedule some Display update
+boolean flagUpdateBpm = false;              //update bpm
+int16_t selectedMood = 0;                   //actual selected mood
+int16_t lastSelectedMood = 255;             //prevents to execute 2 times the same action
+int8_t previousMood = 0;                    //previous mood name
+int8_t lastMorphBarGraphValue = 127;        //0 to MAXINSTRUMENTS possible values
+int8_t flagUpdateMorph = 0;                 //schedule some Display update
+int8_t flagUpdateThisInstrPattern = -1;     //update only one instrument pattern
+int8_t flagNextRomPatternTablePointer = -1; //points to next rom table
+int8_t flagUpdateSampleNumber = -1;         //update sample number on right upper corner
+int8_t flagUpdategateLenght = -1;           //update gate lenght on right upper corner
 int8_t flagEraseInstrumentPattern = -1;
 int8_t flagTapInstrumentPattern = -1;
 int8_t flagRollbackInstrumentTap = -1;
@@ -268,8 +274,8 @@ void displayBlackInstrumentPattern(uint8_t _instr);
 void displayShowInstrumPattern(uint8_t _instr, boolean _source);
 void displayShowPreviousMood();
 void endTriggers();
-boolean oneEncoderButtonPressed(uint8_t target);
-boolean twoEncoderButtonsPressed(uint8_t target1, uint8_t target2);
+boolean onlyOneEncoderButtonIsPressed(uint8_t target);
+boolean twoEncoderButtonsArePressed(uint8_t target1, uint8_t target2);
 void clearInstrumentRam1Pattern(uint8_t _instr);
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
@@ -383,9 +389,10 @@ void ISRfireTimer3()
 void ISRfireTimer4()
 {
   Timer5.attachInterrupt(endTriggers); //trigger end timer
-  Timer5.start(5000);                  //start 5ms triggers timers
-  Timer4.stop();                       //stop timer shift
-  Timer4.detachInterrupt();            //detach procedure
+  Timer5.start(DEFAULTGATELENGHT);     //start 5ms first trigger timer
+  gateLenghtCounter = 0;
+  Timer4.stop();            //stop timer shift
+  Timer4.detachInterrupt(); //detach procedure
 
   //trigger2.start();
   playMidiValue = 0;                                       //calculate final noteVelocity
@@ -417,13 +424,6 @@ void loop()
   //flags if any Display update will be necessary in this cycle
   boolean flagUpdateDisplay = false;
 
-  if (flagUpdateBpm)
-  {
-    flagUpdateBpm = false;
-    displayShowInfo(2, bpm);
-    flagUpdateDisplay = true;
-  }
-
   //read all processed encoders interruptions
   for (uint8_t i = 0; i < MAXENCODERS; i++)
     readEncoder(i);
@@ -436,6 +436,14 @@ void loop()
     checkDefaultDisplay();
     displayShowBrowsedMood();
     flagBrowseMood = false;
+    flagUpdateDisplay = true;
+  }
+
+  //update right upper corner with bpm value
+  else if (flagUpdateBpm)
+  {
+    flagUpdateBpm = false;
+    displayShowInfo(2, bpm);
     flagUpdateDisplay = true;
   }
 
@@ -475,6 +483,7 @@ void loop()
 
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
+      gateLenghtSize[pat] = 0;           //clear all gate lengh sizes
       flagCustomPattern[pat] = 0;        //reset all custom patterns flag
       if (flagBKPdPatternFrom[pat] != 0) //if any pattern was changed , restore it from bkp before do anything
       {
@@ -524,7 +533,6 @@ void loop()
     flagUpdateThisInstrPattern = -1;
     flagNextRomPatternTablePointer = -1;
   }
-
   //if sampler changed
   else if (flagUpdateSampleNumber != -1)
   {
@@ -539,7 +547,13 @@ void loop()
     flagUpdateDisplay = true;
     flagUpdateTimeShift = false;
   }
-
+  //if gate lenght changed
+  else if (flagUpdategateLenght != -1)
+  {
+    displayShowInfo(4, flagUpdategateLenght);
+    flagUpdateDisplay = true;
+    flagUpdategateLenght = -1;
+  }
   //if some pattern should be erased
   else if (flagEraseInstrumentPattern != -1)
   {
@@ -594,7 +608,7 @@ void loop()
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
 
   //if new mood was selected....copy reference tables or create new mood in the morph area
-  if (oneEncoderButtonPressed(ENCBUTMOOD) && interfaceEvent.debounced())
+  if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(1000); //block any other interface event
     flagSelectMood = true;
@@ -607,7 +621,7 @@ void loop()
 
     //if any pattern should be erased
     //morph encoder + instrument modifier + action button + not custom pattern
-    if (twoEncoderButtonsPressed(MORPHENCODER, i + 2) && instrActionState[i] && !flagCustomPattern[i] && interfaceEvent.debounced())
+    if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && !flagCustomPattern[i] && interfaceEvent.debounced())
     {
       interfaceEvent.debounce(1000);
       flagEraseInstrumentPattern = i;
@@ -615,7 +629,7 @@ void loop()
 
     //if any tap should be rollbacked
     //morph encoder + instrument modifier + action button + custom pattern
-    else if (twoEncoderButtonsPressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
+    else if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
     {
       interfaceEvent.debounce(200);
       flagRollbackInstrumentTap = i;
@@ -623,7 +637,7 @@ void loop()
 
     //if any pattern should be permanently muted
     //morph encoder + action button
-    else if (oneEncoderButtonPressed(MORPHENCODER) && instrActionState[i] && interfaceEvent.debounced())
+    else if (onlyOneEncoderButtonIsPressed(MORPHENCODER) && instrActionState[i] && interfaceEvent.debounced())
     {
       permanentMute[i] = !permanentMute[i];
       interfaceEvent.debounce(1000);
@@ -631,7 +645,7 @@ void loop()
 
     //if any pattern should be tapped
     //one instrument modifier + action button
-    else if (oneEncoderButtonPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
     {
       if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the last step
       {
@@ -655,10 +669,26 @@ void loop()
 //close all trigger
 void endTriggers()
 {
+  //compare all triggers times
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    digitalWrite(triggerPins[i], LOW);
-  Timer5.stop(); //stops trigger timer
-  Timer5.detachInterrupt();
+  {
+    if (gateLenghtSize[i] <= gateLenghtCounter)
+      digitalWrite(triggerPins[i], LOW);
+  }
+  //prepare to the next gate verification
+  gateLenghtCounter++;
+  if (gateLenghtCounter > MAXGATELENGHTS) //if all step steps ended
+  {
+    Timer5.stop(); //stops trigger timer
+    Timer5.detachInterrupt();
+    gateLenghtCounter = 0;
+  }
+  else
+  {
+    Timer5.stop();                       //stops trigger timer
+    Timer5.attachInterrupt(endTriggers); //trigger end timer
+    Timer5.start(EXTENDEDGATELENGHT);    //start 80ms triggers timers
+  }
 }
 
 //read queued encoder status
@@ -688,14 +718,14 @@ void readEncoder(uint8_t _queued)
 
     case MORPHENCODER:
       //if morph button AND morph button are pressed and MORPH rotate change timer shift
-      if (twoEncoderButtonsPressed(ENCBUTMOOD, ENCBUTMORPH))
+      if (twoEncoderButtonsArePressed(ENCBUTMOOD, ENCBUTMORPH))
       {
         u_timeShift += encoderChange * u_timeShiftStep;
         u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
         flagUpdateTimeShift = true;
       }
       //if morph button is pressed and MORPH rotate CHANGE BPM
-      else if (oneEncoderButtonPressed(ENCBUTMORPH))
+      else if (onlyOneEncoderButtonIsPressed(ENCBUTMORPH))
       {
         flagUpdateBpm = true;
         bpm += encoderChange;
@@ -720,8 +750,8 @@ void readEncoder(uint8_t _queued)
       //all other instrument encoders
     default:
       uint8_t _instrum = _queued - 2;
-      //if only one modifier pressed , change SAMPLE, schedule to change on Display too
-      if (oneEncoderButtonPressed(sampleButtonModifier[_instrum]))
+      //if only one ASSOCIATED modifier pressed , change SAMPLE, schedule to change on Display too
+      if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_instrum]))
       {
         if (encoderChange == -1)
           drumKitSamplePlaying[_instrum]->reward();
@@ -734,7 +764,14 @@ void readEncoder(uint8_t _queued)
         playMidi(instrSampleMidiNote[_instrum], drumKitSamplePlaying[_instrum]->getValue(), MIDICHANNEL);
         flagUpdateSampleNumber = drumKitSamplePlaying[_instrum]->getValue(); //update only the sample number
       }
-      else //if there is no modifier pressed , only change instrument pattern , schedule event
+      //if only SAME button pressed , change gate lenght
+      else if (onlyOneEncoderButtonIsPressed(_queued))
+      {
+        gateLenghtSize[_instrum] += encoderChange;
+        gateLenghtSize[_instrum] = constrain(gateLenghtSize[_instrum], 0, MAXGATELENGHTS);
+        flagUpdategateLenght = _instrum;
+      }
+      else //if any modifier pressed , only change instrument pattern , schedule event
       {
         int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
         nextRomPatternTablePointer += encoderChange;
@@ -789,14 +826,30 @@ void displayShowInfo(uint8_t _smp, int16_t _val) //update Display right upper co
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
   if (_smp == 0)
+  {
     display.print("smp:");
+    display.print(_val);
+  }
   else if (_smp == 1)
+  {
     display.print("pat:");
+    display.print(_val);
+  }
   else if (_smp == 2)
+  {
     display.print("bpm:");
+    display.print(_val);
+  }
   else if (_smp == 3)
+  {
     display.print("ms:");
-  display.print(_val);
+    display.print(_val);
+  }
+  else if (_smp == 4)
+  {
+    display.print("len:");
+    display.print((DEFAULTGATELENGHT + (gateLenghtSize[_val] * EXTENDEDGATELENGHT)) / 1000);
+  }
 }
 
 void displayShowPreviousMood()
@@ -895,7 +948,7 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 }
 
 //verify if ONLY ONE encoder button is pressed
-boolean oneEncoderButtonPressed(uint8_t target)
+boolean onlyOneEncoderButtonIsPressed(uint8_t target)
 {
   if (encoderButtonState[target]) //if asked button is pressed
   {
@@ -910,7 +963,7 @@ boolean oneEncoderButtonPressed(uint8_t target)
 }
 
 //verify if TWO encoder button is pressed
-boolean twoEncoderButtonsPressed(uint8_t target1, uint8_t target2)
+boolean twoEncoderButtonsArePressed(uint8_t target1, uint8_t target2)
 {
   if (encoderButtonState[target1] && encoderButtonState[target2]) //if two asked buttons are pressed
   {
