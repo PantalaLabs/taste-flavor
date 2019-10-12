@@ -11,7 +11,11 @@ algorithm melisma                             -           o         x
 algorithm stepped cv                          -           o         x
 change hardware pins                          x           o         -
 clock select                                  x           x         x
+variable trigger lenght                       o           o         x
 
+- not applicable
+x scheduled
+o done
 ```
 
 ```
