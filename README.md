@@ -20,17 +20,17 @@ o done
 
 ```
 Contributing Music Producers (alphabetical order):
--Carlos Pires - Cause Org Records (BRA)
--Cheap Conductor - DetroitBR (BRA)
--Edu M - DetroitBR (BRA)
--Fabricio Peçanha - (BRA)
+<li>Carlos Pires - Cause Org Records (BRA)
+<li>Cheap Conductor - DetroitBR (BRA)
+<li>Edu M - DetroitBR (BRA)
+<li>Fabricio Peçanha - (BRA)
 ```
 
 UPDATES:
 10/12/2019:
--new panel with function buttons to make tweaking easier, USB input and some graphic changes;
--new schaematic and pcb;
--new prototype pcb ordered;
+<li>new panel with function buttons to make tweaking easier, USB input and some graphic changes;
+<li>new schaematic and pcb;
+<li>new prototype pcb ordered;
 
 <img alt="" style="border-width:0" src="painel%200.980.jpg" /></a>
 
