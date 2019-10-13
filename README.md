@@ -25,8 +25,7 @@ Cheap Conductor - DetroitBR (BRA)
 Edu M - DetroitBR (BRA)
 Fabricio Peçanha - (BRA)
 
--there are other CMPs who have also confirmed participation but asked to wait until they sent the full Mood;
--others have asked to contact them only near the module launch;
+There are other CMPs who have also confirmed participation but asked to wait until they sent the full Mood or asked to contact them later.
 ```
 
 UPDATES:
