@@ -46,7 +46,7 @@ This Sample Kit associated with a Grid Pattern and a Fantasy Name mold a MOOD:
 
 1. -6 samples: Can be any sound, kick, hats, snares, pads, ambients. All must be recorded with: 24bit / 44100kh and must have the final volume already processed. In the case of Kick and Bass, if played at the same time, they should be sent already mixed.
 
-2. -a grid pattern: a 64 step grid organized in 4ppqn / 4 steps by Beat. It could even be a picture of Ableton or another DAW with the firing sequence of the samples. See Annex I
+2. -a grid pattern or a MIDI file: a 64 step grid organized in 4ppqn / 4 steps by Beat. It could even be a picture of Ableton or another DAW with the firing sequence of the samples. See Annex I
 
 3. -a fantasy name: A fancy name for your mood: Gibran Solomao-Walking on the Moon.
 
