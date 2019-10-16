@@ -46,7 +46,7 @@ Este Kit de Samples associado à um Grid Pattern e um Nome Fantasia , formam um 
 
 1.	-6 samples: Podem ser qualquer som , kick, hats, snares , pads, ambients. Todos devem ser gravados com : 24bit / 44100kh e devem ter o  volume final já processado. Para o caso de Kick e Bass, se forem tocados ao mesmo tempo , devem ser enviados já mixados.
 
-2.	-um grid pattern: um grid de 64 steps organizado em 4ppqn / 4 steps por Beat. Pode ser até mesmo uma foto do Ableton ou outro DAW com a sequência de disparo dos samples. Ver Anexo II
+2.	-um grid pattern ou um arquivo MIDI: um grid de 64 steps organizado em 4ppqn / 4 steps por Beat. Pode ser até mesmo uma foto do Ableton ou outro DAW com a sequência de disparo dos samples. Ver Anexo II
 
 3.	-um nome: um nome fantasia para esse seu mood : Gibran Salomão-Walking on the Moon.
 
