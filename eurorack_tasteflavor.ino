@@ -51,15 +51,16 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #define OLED_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 
-#define MAXSTEPS 64      //max step sequence
-#define MYCHANNEL 1      //midi channel for data transmission
-#define MAXENCODERS 8    //total of encoders
-#define MOODENCODER 0    //total of sample encoders
-#define MORPHENCODER 1   //total of sample encoders
-#define MAXINSTRUMENTS 6 //total of sample encoders
-#define MIDICHANNEL 1    //standart drum midi channel
-#define MOODMIDINOTE 20  //midi note to mood message
-#define MORPHMIDINOTE 21 //midi note to morph message
+#define OLEDUPDATETIME 35000 //microsseconds to update display
+#define MAXSTEPS 64          //max step sequence
+#define MYCHANNEL 1          //midi channel for data transmission
+#define MAXENCODERS 8        //total of encoders
+#define MOODENCODER 0        //total of sample encoders
+#define MORPHENCODER 1       //total of sample encoders
+#define MAXINSTRUMENTS 6     //total of sample encoders
+#define MIDICHANNEL 1        //standart drum midi channel
+#define MOODMIDINOTE 20      //midi note to mood message
+#define MORPHMIDINOTE 21     //midi note to morph message
 #define KICKCHANNEL 0
 #define SNAKERCHANNEL 1 //snare + shaker
 #define CLAPCHANNEL 2
@@ -125,12 +126,13 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define ENCBUTINSTR5 6
 #define ENCBUTINSTR6 7
 
-uint32_t u_lastTick;                 //last time tick was called
-uint32_t u_tickInterval = 1000000;   //tick interval
-boolean flagUpdateTimeShift = false; //flag to update time shift
-int32_t u_timeShift = 1100;          //default time shift keep the 100 microsseconds there
-int32_t u_timeShiftStep = 1000;      //time shift amount update step
-#define u_timeShiftLimit 20000       //time shift + and - limit
+volatile uint32_t u_lastTick;               //last time tick was called
+volatile uint32_t u_tickInterval = 1000000; //tick interval
+boolean flagUpdateTimeShift = false;        //flag to update time shift
+int32_t u_timeShift = 1100;                 //default time shift keep the 100 microsseconds there
+int32_t u_timeShiftStep = 1000;             //time shift amount update step
+#define u_timeShiftLimit 20000              //time shift + and - limit
+volatile uint32_t sampleChangeWindowEndTime;
 
 uint16_t bpm = 125;
 uint32_t u_bpm = 0;
@@ -143,7 +145,7 @@ uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi 
 #define DEFAULTGATELENGHT 5000
 #define EXTENDEDGATELENGHT 40000
 int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
-uint8_t gateLenghtCounter = 0;
+volatile int8_t gateLenghtCounter = 0;
 
 // Trigger trigger1(TRIGOUTPIN1);
 // Trigger trigger2(TRIGOUTPIN2);
@@ -151,7 +153,7 @@ uint8_t gateLenghtCounter = 0;
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
 //encoders buttons : mood, morph, instruments
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINMORPH, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
-uint8_t sampleButtonModifier[MAXINSTRUMENTS] = {ENCBUTINSTR2, ENCBUTINSTR1, ENCBUTINSTR4, ENCBUTINSTR3, ENCBUTINSTR6, ENCBUTINSTR5}; //this points to each instrument sample change button modifier
+uint8_t sampleButtonModifier[MAXENCODERS] = {0, 0, ENCBUTINSTR2, ENCBUTINSTR1, ENCBUTINSTR4, ENCBUTINSTR3, ENCBUTINSTR6, ENCBUTINSTR5}; //this points to each instrument sample change button modifier
 
 boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -188,7 +190,7 @@ Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
 int8_t morphingInstr = 0;
-int8_t stepCount = 0;
+volatile int8_t stepCount = 0;
 int8_t queuedEncoder = 0;
 
 boolean flagBrowseMood = false;             //schedule some Display update
@@ -201,7 +203,8 @@ int8_t lastMorphBarGraphValue = 127;        //0 to MAXINSTRUMENTS possible value
 int8_t flagUpdateMorph = 0;                 //schedule some Display update
 int8_t flagUpdateThisInstrPattern = -1;     //update only one instrument pattern
 int8_t flagNextRomPatternTablePointer = -1; //points to next rom table
-int8_t flagUpdateSampleNumber = -1;         //update sample number on right upper corner
+boolean flagEraseMoodName = false;          //erase mood name when change any original mood configuration
+int8_t flagChangePlayingSample = -1;        //update sample on rasp pi
 int8_t flagUpdategateLenght = -1;           //update gate lenght on right upper corner
 int8_t flagEraseInstrumentPattern = -1;
 int8_t flagTapInstrumentPattern = -1;
@@ -233,6 +236,7 @@ boolean ramPatterns[2][6][MAXSTEPS];
 #define ROM 1
 #define MAXUNDOS MAXSTEPS
 int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
+String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
 
 // #define MAXLOFIKICK 11
 // uint8_t lofiKick[MAXLOFIKICK] = {0, 3, 4, 12, 17, 23, 25, 42, 43, 44, 45};
@@ -246,15 +250,18 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
 void checkDefaultDisplay();
 void displayWelcome();
+void displayEraseBrowsedMoodName();
 void displayShowBrowsedMood();
 void displayShowMorphBar(int8_t _size);
-void displayShowInfo(uint8_t _smp, int16_t _val);
+void displayShowInfo(uint8_t _parm, int16_t _val);
 void displayBlackInstrumentPattern(uint8_t _instr);
 void displayShowInstrumPattern(uint8_t _instr, boolean _source);
 void displayShowPreviousMood();
 void endTriggers();
+boolean sampleUpdateWindow();
+boolean noOneEncoderButtonIsPressed();
 boolean onlyOneEncoderButtonIsPressed(uint8_t target);
-boolean twoEncoderButtonsArePressed(uint8_t target1, uint8_t target2);
+boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
 void clearInstrumentRam1Pattern(uint8_t _instr);
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
@@ -302,7 +309,6 @@ void setup()
     drumKitPatternPlaying[i]->setCyclable(false);
     drumKitSamplePlaying[i]->setCyclable(false);
   }
-  //  morphingInstrument.setCyclable(false);
 
   for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
@@ -363,17 +369,15 @@ void ISRfireTimer3()
   Timer3.start(bpm2micros4ppqn(bpm));
 }
 
-//shifted clock and everything step sequence related
+//shifted clock and everything to step sequencer related
 void ISRfireTimer4()
 {
-
-  Timer5.attachInterrupt(endTriggers); //triggers timer
-  Timer5.start(DEFAULTGATELENGHT);     //start 5ms first trigger timer
-  Timer4.stop();                       //stop timer shift
-  Timer4.detachInterrupt();            //detach procedure
-
   noInterrupts();
   gateLenghtCounter = 0;
+  Timer5.attachInterrupt(endTriggers);                     //triggers timer
+  Timer5.start(DEFAULTGATELENGHT);                         //start 5ms first trigger timer
+  Timer4.stop();                                           //stop timer shift
+  Timer4.detachInterrupt();                                //detach procedure
   uint8_t playMidiValue = 0;                               //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {                                                        //if it is not Actiond
@@ -389,11 +393,11 @@ void ISRfireTimer4()
   }
   if (playMidiValue != 0)
     playMidi(1, playMidiValue, MIDICHANNEL); //send midinote with binary coded triggers message
-
   interrupts();
   stepCount++;
   if (stepCount == MAXSTEPS)
     stepCount = 0;
+  sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
 }
 
 void loop()
@@ -426,16 +430,15 @@ void loop()
     flagUpdateDisplay = true;
   }
 
-  //update morph bar changes
-  else if (flagUpdateMorph != 0)
+  //update morph bar changes and there is available time to update screen
+  else if ((flagUpdateMorph != 0) && sampleUpdateWindow())
   {
     //if CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
     if (flagUpdateMorph == 1)
     {
       morphingInstr++;
-      if (morphingInstr >= (MAXINSTRUMENTS - 1))
+      if (morphingInstr > (MAXINSTRUMENTS + 1))
         morphingInstr--;
-      //      morphingInstrument.advance();
       drumKitSamplePlaying[morphingInstr - 1]->setValue(morphArea[1][morphingInstr - 1]);
       drumKitPatternPlaying[morphingInstr - 1]->setValue(morphArea[1][morphingInstr - 1 + MAXINSTRUMENTS]);
       //send new sample MIDI note do PI
@@ -450,14 +453,13 @@ void loop()
       playMidi(instrSampleMidiNote[morphingInstr - 1], drumKitSamplePlaying[morphingInstr - 1]->getValue(), MIDICHANNEL);
       morphingInstr--;
       if (morphingInstr < 0)
-        morphingInstr++;
+        morphingInstr = 0;
     }
     checkDefaultDisplay();
     displayShowMorphBar(morphingInstr);
     flagUpdateMorph = 0;
     flagUpdateDisplay = true;
   }
-
   //copy selected mood to morph area
   else if (flagSelectMood)
   {
@@ -466,7 +468,6 @@ void loop()
       permanentMute[pat] = 0;
     displayShowPreviousMood();
     displayShowSelectedMood();
-
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
       gateLenghtSize[pat] = 0;           //clear all gate lengh sizes
@@ -515,16 +516,28 @@ void loop()
     copyRomPatternToRam1(flagUpdateThisInstrPattern, flagNextRomPatternTablePointer);
     displayShowInstrumPattern(flagUpdateThisInstrPattern, RAM);
     displayShowInfo(0, flagNextRomPatternTablePointer);
+    if (flagEraseMoodName)
+    {
+      flagEraseMoodName = false;
+      displayEraseBrowsedMoodName();
+    }
     flagUpdateDisplay = true;
     flagUpdateThisInstrPattern = -1;
     flagNextRomPatternTablePointer = -1;
   }
-  //if sampler changed
-  else if (flagUpdateSampleNumber != -1)
+  //if sampler changed and there is available time to update screen
+  else if ((flagChangePlayingSample != -1) && sampleUpdateWindow())
   {
-    displayShowInfo(1, flagUpdateSampleNumber);
+    playMidi(instrSampleMidiNote[flagChangePlayingSample], drumKitSamplePlaying[flagChangePlayingSample]->getValue(), MIDICHANNEL);
+    if (flagEraseMoodName)
+    {
+      flagEraseMoodName = false;
+      displayEraseBrowsedMoodName();
+    }
+
+    displayShowInfo(1, drumKitSamplePlaying[flagChangePlayingSample]->getValue());
     flagUpdateDisplay = true;
-    flagUpdateSampleNumber = -1;
+    flagChangePlayingSample = -1;
   }
   //if time shift changed
   else if (flagUpdateTimeShift)
@@ -654,7 +667,16 @@ void loop()
   }
 }
 
+//allows to change samples only upo to after 2/3 of the tick interval
+//to avoid to change sample the same tiome it was triggered
+boolean sampleUpdateWindow()
+{
+  return (micros() < sampleChangeWindowEndTime);
+}
+
 //close all trigger
+//  _ ______ _______ _______ _______
+//_| |      |       |       |       |______
 void endTriggers()
 {
   //compare all triggers times
@@ -720,11 +742,11 @@ void readEncoder(uint8_t _queued)
         u_bpm = bpm2micros4ppqn(bpm);
       }
       else
-      { //or else , just a morph change
+      { //or else , morph change
         //CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
         if (encoderChange == 1)
         {
-          if (morphingInstr < (MAXINSTRUMENTS - 1)) //if there was one more morphing position available
+          if (morphingInstr < MAXINSTRUMENTS) //if there was one more morphing position available
             flagUpdateMorph = encoderChange;
         }
         //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
@@ -735,11 +757,11 @@ void readEncoder(uint8_t _queued)
         }
       }
       break;
-      //all other instrument encoders
     default:
+      //all other instrument encoders
       uint8_t _instrum = _queued - 2;
-      //if only one ASSOCIATED modifier pressed , change SAMPLE, schedule to change on Display too
-      if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_instrum]))
+      //if only one ASSOCIATED modifier pressed
+      if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_queued]))
       {
         if (encoderChange == -1)
           drumKitSamplePlaying[_instrum]->reward();
@@ -749,8 +771,8 @@ void readEncoder(uint8_t _queued)
         morphArea[1][_instrum] = drumKitSamplePlaying[_instrum]->getValue();
         // else
         //   morphArea[0][_instrum] = drumKitSamplePlaying[_instrum]->getValue();
-        playMidi(instrSampleMidiNote[_instrum], drumKitSamplePlaying[_instrum]->getValue(), MIDICHANNEL);
-        flagUpdateSampleNumber = drumKitSamplePlaying[_instrum]->getValue(); //update only the sample number
+        flagChangePlayingSample = _instrum;
+        flagEraseMoodName = true;
       }
       //if only SAME button pressed , change gate lenght
       else if (onlyOneEncoderButtonIsPressed(_queued))
@@ -759,7 +781,7 @@ void readEncoder(uint8_t _queued)
         gateLenghtSize[_instrum] = constrain(gateLenghtSize[_instrum], 0, MAXGATELENGHTS);
         flagUpdategateLenght = _instrum;
       }
-      else //if any modifier pressed , only change instrument pattern , schedule event
+      else if (noOneEncoderButtonIsPressed()) //if any modifier pressed , only change instrument pattern , schedule event
       {
         int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
         nextRomPatternTablePointer += encoderChange;
@@ -770,6 +792,7 @@ void readEncoder(uint8_t _queued)
         copyRomPatternToRam1(_instrum, nextRomPatternTablePointer);                           //copy selected instrument pattern to RAM
         flagUpdateThisInstrPattern = _instrum;                                                //flags to update this instrument on Display
         flagNextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS];             //flags to new kit value
+        flagEraseMoodName = true;
       }
       break;
     }
@@ -808,34 +831,22 @@ void displayShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 
   }
 }
 
-void displayShowInfo(uint8_t _smp, int16_t _val) //update Display right upper corner with the actual sample or pattern number
+void displayShowInfo(uint8_t _parm, int16_t _val) //update Display right upper corner with the actual sample or pattern number
 {
   display.fillRect(70, 0, Display_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
-  if (_smp == 0)
+  display.print(rightCornerInfo[_parm]);
+  display.print(":");
+  switch (_parm)
   {
-    display.print("smp:");
+  case 0:
+  case 1:
+  case 2:
+  case 3:
     display.print(_val);
-  }
-  else if (_smp == 1)
-  {
-    display.print("pat:");
-    display.print(_val);
-  }
-  else if (_smp == 2)
-  {
-    display.print("bpm:");
-    display.print(_val);
-  }
-  else if (_smp == 3)
-  {
-    display.print("ms:");
-    display.print(_val);
-  }
-  else if (_smp == 4)
-  {
-    display.print("len:");
+    break;
+  case 4:
     display.print((DEFAULTGATELENGHT + (gateLenghtSize[_val] * EXTENDEDGATELENGHT)) / 1000);
   }
 }
@@ -855,9 +866,14 @@ void displayShowSelectedMood()
   display.print(moodKitName[selectedMood]);  //print selected mood name
 }
 
-void displayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+void displayEraseBrowsedMoodName()
 {
   display.fillRect(0, 3 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+}
+
+void displayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+{
+  displayEraseBrowsedMoodName();
   display.setTextColor(WHITE);
   display.setCursor(0, 3 * TEXTLINE_HEIGHT);              //set cursor position
   display.print(moodKitName[selectedMood]);               //print mood name
@@ -935,13 +951,23 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 #endif
 }
 
-//verify if ONLY ONE encoder button is pressed
-boolean onlyOneEncoderButtonIsPressed(uint8_t target)
+//verify if NO ONE encoder button is pressed
+boolean noOneEncoderButtonIsPressed()
 {
-  if (encoderButtonState[target]) //if asked button is pressed
+  for (uint8_t i = 0; i < MAXENCODERS; i++) //search all encoder buttons
+    if (encoderButtonState[i])              //it is pressed
+      return false;
+  //if all tests where OK
+  return true;
+}
+
+//verify if ONLY ONE encoder button is pressed
+boolean onlyOneEncoderButtonIsPressed(uint8_t _target)
+{
+  if (encoderButtonState[_target]) //if asked button is pressed
   {
-    for (int8_t i = 0; i < MAXENCODERS; i++)      //search all encoder buttons
-      if ((i != target) && encoderButtonState[i]) //encoder button is not the asked one and it is pressed , so there are 2 encoder buttons pressed
+    for (uint8_t i = 0; i < MAXENCODERS; i++)      //search all encoder buttons
+      if ((i != _target) && encoderButtonState[i]) //encoder button is not the asked one and it is pressed , so there are 2 encoder buttons pressed
         return false;
   }
   else //if not pressed , return false
@@ -951,12 +977,12 @@ boolean onlyOneEncoderButtonIsPressed(uint8_t target)
 }
 
 //verify if TWO encoder button is pressed
-boolean twoEncoderButtonsArePressed(uint8_t target1, uint8_t target2)
+boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 {
-  if (encoderButtonState[target1] && encoderButtonState[target2]) //if two asked buttons are pressed
+  if (encoderButtonState[_target1] && encoderButtonState[_target2]) //if two asked buttons are pressed
   {
-    for (int8_t i = 0; i < MAXENCODERS; i++)                         //search all encoder buttons
-      if ((i != target1) && (i != target2) && encoderButtonState[i]) //encoder button is not any of asked and it is pressed , so there is a third encoder buttons pressed
+    for (uint8_t i = 0; i < MAXENCODERS; i++)                          //search all encoder buttons
+      if ((i != _target1) && (i != _target2) && encoderButtonState[i]) //encoder button is not any of asked and it is pressed , so there is a third encoder buttons pressed
         return false;
   }
   else //if not pressed , return false
