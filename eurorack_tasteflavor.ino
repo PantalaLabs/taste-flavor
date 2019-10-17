@@ -556,7 +556,7 @@ void loop()
     flagUpdateOled = true;
     flagUpdategateLenght = -1;
   }
-  //if pattern was erased
+  //if erase pattern 
   else if (flagEraseInstrumentPattern != -1)
   {
     oledEraseInstrumentPattern(flagEraseInstrumentPattern); //clear pattern from display
@@ -799,10 +799,10 @@ void readEncoder(uint8_t _queued)
         if (flagBKPdPatternFrom[_instrum] != 0)
         {
           copyRomPatternToRomPattern(_instrum, BKPPATTERN, drumKitPatternPlaying[_instrum]->getValue()); //reverse BKPd pattern to rom area
-          flagBKPdPatternFrom[_instrum] = 0;
           clearUndoArray(_instrum);
           setThisPatternAsOriginal(_instrum);
         }
+        flagBKPdPatternFrom[_instrum] = 0;
         int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
         nextRomPatternTablePointer += encoderChange;
         nextRomPatternTablePointer = constrain(nextRomPatternTablePointer, 1, maxInstrSamples[_instrum] - 1); //constrain sample pointer to1 and max samples per instrument
@@ -1055,7 +1055,7 @@ void setStepIntoUndoArray(uint8_t _instr, uint8_t _step)
 void setAllPatternAsOriginal()
 {
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    flagCustomPattern[i] = 0;
+    setThisPatternAsOriginal(i);
 }
 
 void setThisPatternAsOriginal(uint8_t _instr)
