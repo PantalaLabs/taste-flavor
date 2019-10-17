@@ -42,14 +42,14 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #include <DueTimer.h>
 
 #define I2C_ADDRESS 0x3C
-#define Display_WIDTH 128 // OLED display width, in pixels
-#define Display_HEIGHT 64 // OLED display height, in pixels
-#define TEXTLINE_HEIGHT 9 // OLED display height, in pixels
+#define DISPLAY_WIDTH 128 // OLED Oled width, in pixels
+#define DISPLAY_HEIGHT 64 // OLED Oled height, in pixels
+#define TEXTLINE_HEIGHT 9 // OLED Oled height, in pixels
 
 //adafruit
 #include <Adafruit_SSD1306.h>
 #define OLED_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 
 #define OLEDUPDATETIME 35000 //microsseconds to update display
 #define MAXSTEPS 64          //max step sequence
@@ -67,6 +67,12 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define HATCHANNEL 3
 #define OHHRIDECHANNEL 4 //open hi hat + ride
 #define PERCCHANNEL 5
+#define MAXINSTR1SAMPLES 3
+#define MAXINSTR2SAMPLES 4
+#define MAXINSTR3SAMPLES 5
+#define MAXINSTR4SAMPLES 5
+#define MAXINSTR5SAMPLES 5
+#define MAXINSTR6SAMPLES 3
 #define MAXINSTR1PATTERNS 3
 #define MAXINSTR2PATTERNS 5
 #define MAXINSTR3PATTERNS 5
@@ -160,6 +166,7 @@ boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t instrActionPins[MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
 boolean instrActionState[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 boolean permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+uint8_t maxInstrSamples[MAXINSTRUMENTS] = {MAXINSTR1SAMPLES, MAXINSTR2SAMPLES, MAXINSTR3SAMPLES, MAXINSTR4SAMPLES, MAXINSTR5SAMPLES, MAXINSTR6SAMPLES};
 
 //playing instrument pattern pointer
 Counter instr1patternPointer(MAXINSTR1PATTERNS - 1);
@@ -171,12 +178,12 @@ Counter instr6patternPointer(MAXINSTR6PATTERNS - 1);
 Counter *drumKitPatternPlaying[MAXINSTRUMENTS] = {&instr1patternPointer, &instr2patternPointer, &instr3patternPointer, &instr4patternPointer, &instr5patternPointer, &instr6patternPointer};
 
 //playing instrument sample pointer
-Counter instr1samplePointer(126);
-Counter instr2samplePointer(126);
-Counter instr3samplePointer(126);
-Counter instr4samplePointer(126);
-Counter instr5samplePointer(126);
-Counter instr6samplePointer(126);
+Counter instr1samplePointer(MAXINSTR1SAMPLES);
+Counter instr2samplePointer(MAXINSTR2SAMPLES);
+Counter instr3samplePointer(MAXINSTR3SAMPLES);
+Counter instr4samplePointer(MAXINSTR4SAMPLES);
+Counter instr5samplePointer(MAXINSTR5SAMPLES);
+Counter instr6samplePointer(MAXINSTR6SAMPLES);
 Counter *drumKitSamplePlaying[MAXINSTRUMENTS] = {&instr1samplePointer, &instr2samplePointer, &instr3samplePointer, &instr4samplePointer, &instr5samplePointer, &instr6samplePointer};
 
 Rotary MOODencoder(ENCPINAMOOD, ENCPINBMOOD);
@@ -190,27 +197,25 @@ Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
 int8_t morphingInstr = 0;
-volatile int8_t stepCount = 0;
+volatile int8_t stepCount = -1;
 int8_t queuedEncoder = 0;
 
-boolean flagBrowseMood = false;             //schedule some Display update
-boolean flagSelectMood = false;             //schedule some Display update
-boolean flagUpdateBpm = false;              //update bpm
-int16_t selectedMood = 0;                   //actual selected mood
-int16_t lastSelectedMood = 255;             //prevents to execute 2 times the same action
-int8_t previousMood = 0;                    //previous mood name
-int8_t lastMorphBarGraphValue = 127;        //0 to MAXINSTRUMENTS possible values
-int8_t flagUpdateMorph = 0;                 //schedule some Display update
-int8_t flagUpdateThisInstrPattern = -1;     //update only one instrument pattern
-int8_t flagNextRomPatternTablePointer = -1; //points to next rom table
-boolean flagEraseMoodName = false;          //erase mood name when change any original mood configuration
-int8_t flagChangePlayingSample = -1;        //update sample on rasp pi
-int8_t flagUpdategateLenght = -1;           //update gate lenght on right upper corner
+boolean flagBrowseMood = false;         //schedule some Oled update
+boolean flagSelectMood = false;         //schedule some Oled update
+boolean flagUpdateBpm = false;          //update bpm
+int16_t selectedMood = 0;               //actual selected mood
+int16_t lastSelectedMood = 255;         //prevents to execute 2 times the same action
+int8_t previousMood = 0;                //previous mood name
+int8_t lastMorphBarGraphValue = 127;    //0 to MAXINSTRUMENTS possible values
+int8_t flagUpdateMorph = 0;             //schedule some Oled update
+int8_t flagUpdateThisInstrPattern = -1; //update only one instrument pattern
+boolean flagEraseMoodName = false;      //erase mood name when change any original mood configuration
+int8_t flagChangePlayingSample = -1;    //update sample on rasp pi
+int8_t flagUpdategateLenght = -1;       //update gate lenght on right upper corner
 int8_t flagEraseInstrumentPattern = -1;
 int8_t flagTapInstrumentPattern = -1;
 int8_t flagRollbackInstrumentTap = -1;
-int8_t flagTapStep = -1;
-boolean defaultDisplayNotActiveYet = true;
+boolean defaultOledNotActiveYet = true;
 
 #include "patterns.h"
 //byte *romPatternPoniter[6] = {&romPatternInstr1, &romPatternInstr5, &romPatternInstr5, &romPatternInstr5, &romPatternInstr5, &romPatternInstr6};
@@ -248,22 +253,23 @@ void ISRfireTimer3();
 void ISRfireTimer4();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
-void checkDefaultDisplay();
-void displayWelcome();
-void displayEraseBrowsedMoodName();
-void displayShowBrowsedMood();
-void displayShowMorphBar(int8_t _size);
-void displayShowInfo(uint8_t _parm, int16_t _val);
-void displayBlackInstrumentPattern(uint8_t _instr);
-void displayShowInstrumPattern(uint8_t _instr, boolean _source);
-void displayShowPreviousMood();
+void checkDefaultOled();
+void oledWelcome();
+void oledEraseBrowsedMoodName();
+void oledShowBrowsedMood();
+void oledShowMorphBar(int8_t _size);
+void oledShowCornerInfo(uint8_t _parm, int16_t _val);
+void oledEraseInstrumentPattern(uint8_t _instr);
+void oledShowInstrumPattern(uint8_t _instr, boolean _source);
+void oledShowPreviousMood();
 void endTriggers();
 boolean sampleUpdateWindow();
 boolean noOneEncoderButtonIsPressed();
 boolean onlyOneEncoderButtonIsPressed(uint8_t target);
 boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
-void clearInstrumentRam1Pattern(uint8_t _instr);
+void eraseInstrumentRam1Pattern(uint8_t _instr);
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
+void clearUndoArray(uint8_t _instr);
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
 void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
 void setThisPatternAsCustom(uint8_t _instr);
@@ -341,7 +347,7 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.display();
   delay(2000);
-  displayWelcome();
+  oledWelcome();
   display.display();
 
   //internal clock
@@ -395,41 +401,38 @@ void ISRfireTimer4()
     playMidi(1, playMidiValue, MIDICHANNEL); //send midinote with binary coded triggers message
   interrupts();
   stepCount++;
-  if (stepCount == MAXSTEPS)
+  if (stepCount >= MAXSTEPS)
     stepCount = 0;
   sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
 }
 
 void loop()
 {
-  //flags if any Display update will be necessary in this cycle
-  boolean flagUpdateDisplay = false;
+  //flags if any Oled update will be necessary in this cycle
+  boolean flagUpdateOled = false;
 
   //read all processed encoders interruptions
-  readEncoder(queuedEncoder);
   queuedEncoder++;
   if (queuedEncoder == MAXENCODERS)
     queuedEncoder = 0;
+  readEncoder(queuedEncoder);
 
-  //check for all Display updates ===============================================================
-
+  //check for all Oled updates ===============================================================
   //if new mood was selected
   if (flagBrowseMood)
   {
-    checkDefaultDisplay();
-    displayShowBrowsedMood();
+    checkDefaultOled();
+    oledShowBrowsedMood();
     flagBrowseMood = false;
-    flagUpdateDisplay = true;
+    flagUpdateOled = true;
   }
-
   //update right upper corner with bpm value
   else if (flagUpdateBpm)
   {
     flagUpdateBpm = false;
-    displayShowInfo(2, bpm);
-    flagUpdateDisplay = true;
+    oledShowCornerInfo(2, bpm);
+    flagUpdateOled = true;
   }
-
   //update morph bar changes and there is available time to update screen
   else if ((flagUpdateMorph != 0) && sampleUpdateWindow())
   {
@@ -455,19 +458,19 @@ void loop()
       if (morphingInstr < 0)
         morphingInstr = 0;
     }
-    checkDefaultDisplay();
-    displayShowMorphBar(morphingInstr);
+    checkDefaultOled();
+    oledShowMorphBar(morphingInstr);
     flagUpdateMorph = 0;
-    flagUpdateDisplay = true;
+    flagUpdateOled = true;
   }
   //copy selected mood to morph area
   else if (flagSelectMood)
   {
-    checkDefaultDisplay();
-    for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
+    checkDefaultOled();
+    for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) //reset all permanet mute
       permanentMute[pat] = 0;
-    displayShowPreviousMood();
-    displayShowSelectedMood();
+    oledShowPreviousMood();
+    oledShowSelectedMood();
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
       gateLenghtSize[pat] = 0;           //clear all gate lengh sizes
@@ -504,101 +507,76 @@ void loop()
       }
     }
     previousMood = selectedMood;
-    displayShowMorphBar(-1);
+    oledShowMorphBar(-1);
     morphingInstr = 0;
     flagSelectMood = false;
-    flagUpdateDisplay = true;
+    flagUpdateOled = true;
   }
 
   //if only one intrument pattern changed
   else if (flagUpdateThisInstrPattern != -1)
   {
-    copyRomPatternToRam1(flagUpdateThisInstrPattern, flagNextRomPatternTablePointer);
-    displayShowInstrumPattern(flagUpdateThisInstrPattern, RAM);
-    displayShowInfo(0, flagNextRomPatternTablePointer);
+    oledShowInstrumPattern(flagUpdateThisInstrPattern, RAM);
+    oledShowCornerInfo(0, morphArea[1][flagUpdateThisInstrPattern + MAXINSTRUMENTS]);
     if (flagEraseMoodName)
     {
       flagEraseMoodName = false;
-      displayEraseBrowsedMoodName();
+      oledEraseBrowsedMoodName();
     }
-    flagUpdateDisplay = true;
+    flagUpdateOled = true;
     flagUpdateThisInstrPattern = -1;
-    flagNextRomPatternTablePointer = -1;
   }
   //if sampler changed and there is available time to update screen
   else if ((flagChangePlayingSample != -1) && sampleUpdateWindow())
   {
+    //send midi to pi to change to new sample
     playMidi(instrSampleMidiNote[flagChangePlayingSample], drumKitSamplePlaying[flagChangePlayingSample]->getValue(), MIDICHANNEL);
     if (flagEraseMoodName)
     {
       flagEraseMoodName = false;
-      displayEraseBrowsedMoodName();
+      oledEraseBrowsedMoodName();
     }
-
-    displayShowInfo(1, drumKitSamplePlaying[flagChangePlayingSample]->getValue());
-    flagUpdateDisplay = true;
+    oledShowCornerInfo(1, drumKitSamplePlaying[flagChangePlayingSample]->getValue());
+    flagUpdateOled = true;
     flagChangePlayingSample = -1;
   }
   //if time shift changed
   else if (flagUpdateTimeShift)
   {
-    displayShowInfo(3, (u_timeShift - 100) / 1000);
-    flagUpdateDisplay = true;
+    oledShowCornerInfo(3, (u_timeShift - 100) / 1000);
+    flagUpdateOled = true;
     flagUpdateTimeShift = false;
   }
   //if gate lenght changed
   else if (flagUpdategateLenght != -1)
   {
-    displayShowInfo(4, flagUpdategateLenght);
-    flagUpdateDisplay = true;
+    oledShowCornerInfo(4, flagUpdategateLenght);
+    flagUpdateOled = true;
     flagUpdategateLenght = -1;
   }
-  //if some pattern should be erased
+  //if pattern was erased
   else if (flagEraseInstrumentPattern != -1)
   {
-    displayBlackInstrumentPattern(flagEraseInstrumentPattern);                                                                         //clear pattern from display
-    copyRomPatternToRomPattern(flagEraseInstrumentPattern, drumKitPatternPlaying[flagEraseInstrumentPattern]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
-    copyRomPatternToRomPattern(flagEraseInstrumentPattern, 1, drumKitPatternPlaying[flagEraseInstrumentPattern]->getValue());          //copy empty pattern to actual pattern
-    // if (flagEraseInstrumentPattern < morphingInstr)                                                                    //if instrument not morphed , force play the selected pattern
-    //   drumKitPatternPlaying[flagEraseInstrumentPattern]->setValue(0);                                                                  //point actual playing to custom pattern
-    clearInstrumentRam1Pattern(flagEraseInstrumentPattern); //clear actual pattern ram area
-    flagUpdateDisplay = true;
+    oledEraseInstrumentPattern(flagEraseInstrumentPattern); //clear pattern from display
+    flagUpdateOled = true;
     flagEraseInstrumentPattern = -1;
-    flagBKPdPatternFrom[flagEraseInstrumentPattern] = flagEraseInstrumentPattern;
   }
   //if step should be tapped
   else if (flagTapInstrumentPattern != -1)
   {
-    //if this pattern isnt bkp´d yet
-    if (flagBKPdPatternFrom[flagTapInstrumentPattern] == 0)
-    {
-      copyRomPatternToRomPattern(flagTapInstrumentPattern, drumKitPatternPlaying[flagTapInstrumentPattern]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
-      flagBKPdPatternFrom[flagTapInstrumentPattern] = flagTapInstrumentPattern;
-    }
-    setStepIntoRomPattern(flagTapInstrumentPattern, drumKitPatternPlaying[flagTapInstrumentPattern]->getValue(), flagTapStep, 1); //insert new step into Rom pattern
-    setStepIntoRamPattern(flagTapInstrumentPattern, flagTapStep, 1);                                                              //insert new step into Ram 1 pattern
-    setStepIntoUndoArray(flagTapInstrumentPattern, flagTapStep);
-    setThisPatternAsCustom(flagTapInstrumentPattern);
-    displayShowInstrumPattern(flagTapInstrumentPattern, RAM); //update display with new inserted step
-    flagUpdateDisplay = true;
+    oledShowInstrumPattern(flagTapInstrumentPattern, RAM); //update Oled with new inserted step
+    flagUpdateOled = true;
     flagTapInstrumentPattern = -1;
-    flagTapStep = -1;
   }
   else if (flagRollbackInstrumentTap != -1)
   {
-    if (undoStack[0][flagRollbackInstrumentTap] != -1)
-    {
-      setStepIntoRomPattern(flagRollbackInstrumentTap, drumKitPatternPlaying[flagRollbackInstrumentTap]->getValue(), undoStack[0][flagRollbackInstrumentTap], 0); //insert new step into Rom pattern
-      setStepIntoRamPattern(flagRollbackInstrumentTap, undoStack[0][flagRollbackInstrumentTap], 0);                                                               //insert new step into Ram 1 pattern
-      rollbackStepIntoUndoArray(flagRollbackInstrumentTap);                                                                                                       //rollback the last saved step
-      displayShowInstrumPattern(flagRollbackInstrumentTap, RAM);                                                                                                  //update display with new inserted step
-      flagUpdateDisplay = true;
-      flagRollbackInstrumentTap = -1;
-    }
+    oledShowInstrumPattern(flagRollbackInstrumentTap, RAM); //update Oled with removed step
+    flagUpdateOled = true;
+    flagRollbackInstrumentTap = -1;
   }
 
-  //if any Display update
-  if (flagUpdateDisplay)
+  //if any Oled update
+  if (flagUpdateOled)
     display.display();
 
   //read interface inputs ===========================================================================================================
@@ -623,6 +601,9 @@ void loop()
     if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && !flagCustomPattern[i] && interfaceEvent.debounced())
     {
       interfaceEvent.debounce(1000);
+      copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
+      copyRomPatternToRomPattern(i, 1, drumKitPatternPlaying[i]->getValue());          //copy empty pattern to actual pattern
+      eraseInstrumentRam1Pattern(i);
       flagEraseInstrumentPattern = i;
     }
 
@@ -630,8 +611,16 @@ void loop()
     //morph encoder + instrument modifier + action button + custom pattern
     else if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
     {
-      interfaceEvent.debounce(200);
-      flagRollbackInstrumentTap = i;
+      if (undoStack[0][i] != -1)
+      {
+        setStepIntoRomPattern(i, drumKitPatternPlaying[i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
+        setStepIntoRamPattern(i, undoStack[0][i], 0);                                       //insert new step into Ram 1 pattern
+        rollbackStepIntoUndoArray(i);                                                       //rollback the last saved step
+        oledShowInstrumPattern(i, RAM);                                                     //update Oled with new inserted step
+        flagUpdateOled = true;
+        flagRollbackInstrumentTap = i;
+        interfaceEvent.debounce(200);
+      }
     }
 
     //if any pattern should be permanently muted
@@ -646,23 +635,37 @@ void loop()
     //one instrument modifier + action button
     else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
     {
-      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the last step
+      int8_t flagTapStep;
+      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
       {
-        int8_t fakeStep = stepCount;
-        fakeStep--;
-        if (fakeStep < 0)
-          fakeStep = MAXSTEPS - 1;
-        flagTapStep = fakeStep;
+        //tap this step
+        flagTapStep = stepCount;
         playMidi(1, powint(2, 5 - i), MIDICHANNEL); //send midinote to play only this instrument
       }
       else
       {
-        flagTapStep = stepCount;
-        //no need to send midinote to play this instrument because it ill be saved to next step cycle
+        //tap saved to next step
+        int8_t nextStep = stepCount;
+        nextStep++;
+        if (nextStep >= MAXSTEPS)
+          nextStep = 0;
+        flagTapStep = nextStep;
+        //no need to send midinote to play this instrument because it will be saved to next step cycle
       }
       interfaceEvent.debounce(u_tickInterval / 1000);
+      //if this pattern isnt bkp´d yet
+      if (flagBKPdPatternFrom[i] == 0)
+      {
+        //save actual pattern into bkp area 0
+        copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN);
+        //save actual playing pattern as BKPd
+        flagBKPdPatternFrom[i] = drumKitPatternPlaying[i]->getValue();
+      }
+      setStepIntoRomPattern(i, drumKitPatternPlaying[i]->getValue(), flagTapStep, 1); //insert new step into Rom pattern
+      setStepIntoRamPattern(i, flagTapStep, 1);                                       //insert new step into Ram 1 pattern
+      setStepIntoUndoArray(i, flagTapStep);
+      setThisPatternAsCustom(i);
       flagTapInstrumentPattern = i;
-      //code : undo array
     }
   }
 }
@@ -781,17 +784,23 @@ void readEncoder(uint8_t _queued)
         gateLenghtSize[_instrum] = constrain(gateLenghtSize[_instrum], 0, MAXGATELENGHTS);
         flagUpdategateLenght = _instrum;
       }
-      else if (noOneEncoderButtonIsPressed()) //if any modifier pressed , only change instrument pattern , schedule event
+      else if (noOneEncoderButtonIsPressed()) //if no modifier pressed , only change instrument pattern , schedule event
       {
+        //if this pattern was tapped and BKPd , restore
+        if (flagBKPdPatternFrom[_instrum] != 0)
+        {
+          copyRomPatternToRomPattern(_instrum, BKPPATTERN, drumKitPatternPlaying[_instrum]->getValue()); //reverse BKPd pattern to rom area
+          flagBKPdPatternFrom[_instrum] = 0;
+          clearUndoArray(_instrum);
+        }
         int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
         nextRomPatternTablePointer += encoderChange;
-        nextRomPatternTablePointer = max(1, nextRomPatternTablePointer);
-        morphArea[1][_instrum + MAXINSTRUMENTS] = nextRomPatternTablePointer;                 //update destination morph area with the new pattern value
-        if (_instrum < morphingInstr)                                                         //if instrument not morphed , force play the selected pattern
-          drumKitPatternPlaying[_instrum]->setValue(morphArea[1][_instrum + MAXINSTRUMENTS]); //set new value
-        copyRomPatternToRam1(_instrum, nextRomPatternTablePointer);                           //copy selected instrument pattern to RAM
-        flagUpdateThisInstrPattern = _instrum;                                                //flags to update this instrument on Display
-        flagNextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS];             //flags to new kit value
+        nextRomPatternTablePointer = constrain(nextRomPatternTablePointer, 1, maxInstrSamples[_instrum] - 1); //constrain sample pointer to1 and max samples per instrument
+        morphArea[1][_instrum + MAXINSTRUMENTS] = nextRomPatternTablePointer;                                 //update destination morph area with the new pattern value
+        if (_instrum < morphingInstr)                                                                         //if instrument not morphed , force play the selected pattern
+          drumKitPatternPlaying[_instrum]->setValue(morphArea[1][_instrum + MAXINSTRUMENTS]);                 //set new value
+        copyRomPatternToRam1(_instrum, morphArea[1][_instrum + MAXINSTRUMENTS]);                              //copy selected instrument pattern to RAM
+        flagUpdateThisInstrPattern = _instrum;                                                                //flags to update this instrument on Display
         flagEraseMoodName = true;
       }
       break;
@@ -799,20 +808,20 @@ void readEncoder(uint8_t _queued)
   }
 }
 
-//check if default Display wasnt show yet
-void checkDefaultDisplay()
+//check if default Oled wasnt show yet
+void checkDefaultOled()
 {
-  if (defaultDisplayNotActiveYet)
+  if (defaultOledNotActiveYet)
   {
-    defaultDisplayNotActiveYet = false;
+    defaultOledNotActiveYet = false;
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    displayShowBrowsedMood();
-    displayShowMorphBar(-1);
+    oledShowBrowsedMood();
+    oledShowMorphBar(-1);
   }
 }
 
-void displayWelcome()
+void oledWelcome()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -820,7 +829,7 @@ void displayWelcome()
   display.println(F("    and morph it -->"));
 }
 
-void displayShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 pixels each
+void oledShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 pixels each
 {
   if (lastMorphBarGraphValue != _size)
   {
@@ -831,9 +840,9 @@ void displayShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 
   }
 }
 
-void displayShowInfo(uint8_t _parm, int16_t _val) //update Display right upper corner with the actual sample or pattern number
+void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper corner with the actual sample or pattern number
 {
-  display.fillRect(70, 0, Display_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
+  display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
   display.print(rightCornerInfo[_parm]);
@@ -851,41 +860,41 @@ void displayShowInfo(uint8_t _parm, int16_t _val) //update Display right upper c
   }
 }
 
-void displayShowPreviousMood()
+void oledShowPreviousMood()
 {
-  display.fillRect(0, TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+  display.fillRect(0, TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT, BLACK);
   display.setTextColor(WHITE);
   display.setCursor(0, TEXTLINE_HEIGHT);    //set cursor position
   display.print(moodKitName[previousMood]); //print previous mood name
 }
-void displayShowSelectedMood()
+void oledShowSelectedMood()
 {
-  display.fillRect(0, 2 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+  display.fillRect(0, 2 * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT, BLACK);
   display.setTextColor(WHITE);
   display.setCursor(0, 2 * TEXTLINE_HEIGHT); //set cursor position
   display.print(moodKitName[selectedMood]);  //print selected mood name
 }
 
-void displayEraseBrowsedMoodName()
+void oledEraseBrowsedMoodName()
 {
-  display.fillRect(0, 3 * TEXTLINE_HEIGHT, Display_WIDTH, TEXTLINE_HEIGHT, BLACK);
+  display.fillRect(0, 3 * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
 }
 
-void displayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+void oledShowBrowsedMood() //update almost all bottom Oled area with the name of the selected mood and all 6 available instruments
 {
-  displayEraseBrowsedMoodName();
+  oledEraseBrowsedMoodName();
   display.setTextColor(WHITE);
   display.setCursor(0, 3 * TEXTLINE_HEIGHT);              //set cursor position
   display.print(moodKitName[selectedMood]);               //print mood name
   for (int8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
-    displayShowInstrumPattern(instr, ROM);
+    oledShowInstrumPattern(instr, ROM);
 }
 
-void displayShowInstrumPattern(uint8_t _instr, boolean _source)
+void oledShowInstrumPattern(uint8_t _instr, boolean _source)
 {
   boolean mustPrintStep = false;
   uint8_t targetPattern = moodKitPresetPointers[selectedMood][_instr + MAXINSTRUMENTS];
-  displayBlackInstrumentPattern(_instr);
+  oledEraseInstrumentPattern(_instr);
   display.setTextColor(WHITE);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
@@ -934,9 +943,9 @@ void displayShowInstrumPattern(uint8_t _instr, boolean _source)
 }
 
 //erase exatctly one line pattern
-void displayBlackInstrumentPattern(uint8_t _instr)
+void oledEraseInstrumentPattern(uint8_t _instr)
 {
-  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), Display_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
+  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }
 
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
@@ -992,7 +1001,7 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 }
 
 //clear pattern from ram 1 area
-void clearInstrumentRam1Pattern(uint8_t _instr)
+void eraseInstrumentRam1Pattern(uint8_t _instr)
 {
   for (int8_t step = 0; step < MAXSTEPS; step++)
     ramPatterns[1][_instr][step] = 0;
@@ -1018,6 +1027,12 @@ void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
 {
   ramPatterns[1][_instr][_step] = _val; //save tapped step
+}
+
+void clearUndoArray(uint8_t _instr)
+{
+  for (uint8_t i = 0; i < MAXUNDOS; i++)
+    undoStack[i][_instr] = -1;
 }
 
 void setStepIntoUndoArray(uint8_t _instr, uint8_t _step)
