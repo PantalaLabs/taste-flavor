@@ -67,12 +67,12 @@ Adafruit_SSD1306 display(Display_WIDTH, Display_HEIGHT, &Wire, OLED_RESET);
 #define HATCHANNEL 3
 #define OHHRIDECHANNEL 4 //open hi hat + ride
 #define PERCCHANNEL 5
-#define MAXINSTR1PATTERNS 17
-#define MAXINSTR2PATTERNS 27
-#define MAXINSTR3PATTERNS 27
-#define MAXINSTR4PATTERNS 27
-#define MAXINSTR5PATTERNS 27
-#define MAXINSTR6PATTERNS 19
+#define MAXINSTR1PATTERNS 3
+#define MAXINSTR2PATTERNS 5
+#define MAXINSTR3PATTERNS 5
+#define MAXINSTR4PATTERNS 5
+#define MAXINSTR5PATTERNS 5
+#define MAXINSTR6PATTERNS 4
 #define DOTGRIDINIT 36
 #define GRIDPATTERNHEIGHT 4
 #define BKPPATTERN 0
@@ -224,10 +224,10 @@ String moodKitName[MAXMOODS] = {"", "P.Labs-Choke", "P.Labs-Empty Room", "P.Labs
 //SAMPLES + PATTERN
 int8_t moodKitPresetPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
     //s, s, s, s, s, s, p, p, p, p, p, p
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 2, 2, 3, 5, 6, 7},
-    {1, 1, 1, 1, 1, 0, 2, 4, 7, 9, 3, 5},
-    {2, 2, 2, 2, 2, 1, 2, 3, 6, 2, 3, 1}};
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, //reserved MUTE = 1  NOT = 0
+    {0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 1},
+    {1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 2},
+    {2, 2, 2, 2, 2, 1, 2, 4, 4, 4, 4, 1}};
 
 //MORPH 6 pointer samples + 6 pointer patterns / 0=morph area 0 / 1=morph area 1
 uint8_t morphArea[2][2 * MAXINSTRUMENTS];
