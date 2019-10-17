@@ -1,4 +1,5 @@
 //position [0] reserved to BKP pattern
+//position [1] reserved to "MUTE" pattern
 boolean romPatternInstr1[MAXINSTR1PATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
@@ -23,6 +24,7 @@ boolean romPatternInstr1[MAXINSTR1PATTERNS][MAXSTEPS] = {
 };
 
 //position [0] reserved to BKP pattern
+//position [1] reserved to "MUTE" pattern
 boolean romPatternInstr2[MAXINSTR2PATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
@@ -56,7 +58,8 @@ boolean romPatternInstr2[MAXINSTR2PATTERNS][MAXSTEPS] = {
 
 };
 
-//array romPatternInstr5[0][MAXSTEPS] reserved to custom pattern
+//position [0] reserved to BKP pattern
+//position [1] reserved to "MUTE" pattern
 boolean romPatternInstr3[MAXINSTR3PATTERNS][MAXSTEPS] = {
     //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
     //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
