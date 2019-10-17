@@ -272,6 +272,8 @@ void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void clearUndoArray(uint8_t _instr);
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
 void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
+void setAllPatternAsOriginal();
+void setThisPatternAsOriginal(uint8_t _instr);
 void setThisPatternAsCustom(uint8_t _instr);
 void rollbackStepIntoUndoArray(uint8_t _instr);
 void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer);
@@ -471,10 +473,10 @@ void loop()
       permanentMute[pat] = 0;
     oledShowPreviousMood();
     oledShowSelectedMood();
+    setAllPatternAsOriginal();
     for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
     {
       gateLenghtSize[pat] = 0;           //clear all gate lengh sizes
-      flagCustomPattern[pat] = 0;        //reset all custom patterns flag
       if (flagBKPdPatternFrom[pat] != 0) //if any pattern was changed , restore it from bkp before do anything
       {
         copyRomPatternToRomPattern(pat, BKPPATTERN, flagBKPdPatternFrom[pat]); //copy BKPd pattern to its original place
@@ -600,10 +602,18 @@ void loop()
     //morph encoder + instrument modifier + action button + not custom pattern
     if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && !flagCustomPattern[i] && interfaceEvent.debounced())
     {
+      if (flagBKPdPatternFrom[i] == 0)
+      {
+        copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN); //save actual pattern into bkp area 0
+        copyRomPatternToRomPattern(i, 1, drumKitPatternPlaying[i]->getValue());          //copy empty pattern to actual pattern
+        flagBKPdPatternFrom[i] = drumKitPatternPlaying[i]->getValue();                   //save actual playing pattern as BKPd
+        setThisPatternAsCustom(i);
+      }
+      else
+      {
+        //this pattern was BKPd so less things CODEME
+      }
       interfaceEvent.debounce(1000);
-      copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN); //copy actual pattern to bkp area
-      copyRomPatternToRomPattern(i, 1, drumKitPatternPlaying[i]->getValue());          //copy empty pattern to actual pattern
-      eraseInstrumentRam1Pattern(i);
       flagEraseInstrumentPattern = i;
     }
 
@@ -611,6 +621,7 @@ void loop()
     //morph encoder + instrument modifier + action button + custom pattern
     else if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && flagCustomPattern[i] && interfaceEvent.debounced())
     {
+      //if there was any rollback available
       if (undoStack[0][i] != -1)
       {
         setStepIntoRomPattern(i, drumKitPatternPlaying[i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
@@ -656,10 +667,8 @@ void loop()
       //if this pattern isnt bkp´d yet
       if (flagBKPdPatternFrom[i] == 0)
       {
-        //save actual pattern into bkp area 0
-        copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN);
-        //save actual playing pattern as BKPd
-        flagBKPdPatternFrom[i] = drumKitPatternPlaying[i]->getValue();
+        copyRomPatternToRomPattern(i, drumKitPatternPlaying[i]->getValue(), BKPPATTERN); //save actual pattern into bkp area 0
+        flagBKPdPatternFrom[i] = drumKitPatternPlaying[i]->getValue();                   //save actual playing pattern as BKPd
       }
       setStepIntoRomPattern(i, drumKitPatternPlaying[i]->getValue(), flagTapStep, 1); //insert new step into Rom pattern
       setStepIntoRamPattern(i, flagTapStep, 1);                                       //insert new step into Ram 1 pattern
@@ -792,6 +801,7 @@ void readEncoder(uint8_t _queued)
           copyRomPatternToRomPattern(_instrum, BKPPATTERN, drumKitPatternPlaying[_instrum]->getValue()); //reverse BKPd pattern to rom area
           flagBKPdPatternFrom[_instrum] = 0;
           clearUndoArray(_instrum);
+          setThisPatternAsOriginal(_instrum);
         }
         int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
         nextRomPatternTablePointer += encoderChange;
@@ -1040,6 +1050,17 @@ void setStepIntoUndoArray(uint8_t _instr, uint8_t _step)
   for (uint8_t i = (MAXUNDOS - 1); i > 0; i--)
     undoStack[i][_instr] = undoStack[i - 1][_instr]; //move all values ahead to open space on stack
   undoStack[0][_instr] = _step;
+}
+
+void setAllPatternAsOriginal()
+{
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    flagCustomPattern[i] = 0;
+}
+
+void setThisPatternAsOriginal(uint8_t _instr)
+{
+  flagCustomPattern[_instr] = 0;
 }
 
 void setThisPatternAsCustom(uint8_t _instr)
