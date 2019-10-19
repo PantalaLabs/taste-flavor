@@ -39,7 +39,6 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 
 #include <PantalaDefines.h>
 #include <EventDebounce.h>
-#include <Counter.h>
 #include <Rotary.h>
 #include <DueTimer.h>
 
@@ -63,12 +62,6 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define MIDICHANNEL 1        //standart drum midi channel
 #define MOODMIDINOTE 20      //midi note to mood message
 #define MORPHMIDINOTE 21     //midi note to morph message
-#define KICKCHANNEL 0
-#define SNAKERCHANNEL 1 //snare + shaker
-#define CLAPCHANNEL 2
-#define HATCHANNEL 3
-#define OHHRIDECHANNEL 4 //open hi hat + ride
-#define PERCCHANNEL 5
 #define MAXINSTR1SAMPLES 3
 #define MAXINSTR2SAMPLES 4
 #define MAXINSTR3SAMPLES 5
@@ -895,48 +888,41 @@ void oledShowInstrumPattern(uint8_t _instr, boolean _source)
   {
     mustPrintStep = false;
     if ((_source == RAM) && (ramPatterns[1][_instr][step])) //if source = RAM
-    {
       mustPrintStep = true;
-    }
+
     //source = ROM and a valid pattern > 0
     else if ((_source == ROM) && (targetPattern > 0))
     {
-      if (_instr == KICKCHANNEL)
+      switch (_instr)
       {
+      case 0:
         if (refPattern1[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
-      }
-      else if (_instr == SNAKERCHANNEL)
-      {
+        break;
+      case 1:
         if (refPattern2[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
-      }
-      else if (_instr == CLAPCHANNEL)
-      {
+      case 2:
         if (refPattern3[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
-      }
-      else if (_instr == HATCHANNEL)
-      {
+        break;
+      case 3:
         if (refPattern4[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
-      }
-      else if (_instr == OHHRIDECHANNEL)
-      {
+        break;
+      case 4:
         if (refPattern5[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
-      }
-      else
-      {
+        break;
+      case 5:
         if (refPattern6[targetPattern][step]) //if it is an active step
           mustPrintStep = true;
       }
+      if (mustPrintStep)
+        display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
     }
-    if (mustPrintStep)
-      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }
-
 //erase exatctly one line pattern
 void oledEraseInstrumentPattern(uint8_t _instr)
 {
@@ -1005,18 +991,27 @@ void eraseInstrumentRam1Pattern(uint8_t _instr)
 //save tapped step into respective rom table
 void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
 {
-  if (_instr == KICKCHANNEL)
+  switch (_instr)
+  {
+  case 0:
     refPattern1[_pattern][_step] = _val;
-  else if (_instr == SNAKERCHANNEL)
+    break;
+  case 1:
     refPattern2[_pattern][_step] = _val;
-  else if (_instr == CLAPCHANNEL)
+    break;
+  case 2:
     refPattern3[_pattern][_step] = _val;
-  else if (_instr == HATCHANNEL)
+    break;
+  case 3:
     refPattern4[_pattern][_step] = _val;
-  else if (_instr == OHHRIDECHANNEL)
+    break;
+  case 4:
     refPattern5[_pattern][_step] = _val;
-  else
+    break;
+  case 5:
     refPattern6[_pattern][_step] = _val;
+    break;
+  }
 }
 
 void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
@@ -1072,18 +1067,27 @@ void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer)
   lastCopied_PatternTablePointer = _romPatternTablePointer;
   for (uint8_t i = 0; i < MAXSTEPS; i++)
   {
-    if (_instr == KICKCHANNEL)
+    switch (_instr)
+    {
+    case 0:
       ramPatterns[1][_instr][i] = refPattern1[_romPatternTablePointer][i];
-    else if (_instr == SNAKERCHANNEL)
+      break;
+    case 1:
       ramPatterns[1][_instr][i] = refPattern2[_romPatternTablePointer][i];
-    else if (_instr == CLAPCHANNEL)
+      break;
+    case 2:
       ramPatterns[1][_instr][i] = refPattern3[_romPatternTablePointer][i];
-    else if (_instr == HATCHANNEL)
+      break;
+    case 3:
       ramPatterns[1][_instr][i] = refPattern4[_romPatternTablePointer][i];
-    else if (_instr == OHHRIDECHANNEL)
+      break;
+    case 4:
       ramPatterns[1][_instr][i] = refPattern5[_romPatternTablePointer][i];
-    else
+      break;
+    case 5:
       ramPatterns[1][_instr][i] = refPattern6[_romPatternTablePointer][i];
+      break;
+    }
   }
 }
 
@@ -1092,18 +1096,27 @@ void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source, uint8_t _target
 {
   for (uint8_t i = 0; i < MAXSTEPS; i++)
   {
-    if (_instr == KICKCHANNEL)
+    switch (_instr)
+    {
+    case 0:
       refPattern1[_target][i] = refPattern1[_source][i];
-    else if (_instr == SNAKERCHANNEL)
+      break;
+    case 1:
       refPattern2[_target][i] = refPattern2[_source][i];
-    else if (_instr == CLAPCHANNEL)
+      break;
+    case 2:
       refPattern3[_target][i] = refPattern3[_source][i];
-    else if (_instr == HATCHANNEL)
+      break;
+    case 3:
       refPattern4[_target][i] = refPattern4[_source][i];
-    else if (_instr == OHHRIDECHANNEL)
+      break;
+    case 4:
       refPattern5[_target][i] = refPattern5[_source][i];
-    else
+      break;
+    case 5:
       refPattern6[_target][i] = refPattern6[_source][i];
+      break;
+    }
   }
 }
 
