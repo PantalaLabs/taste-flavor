@@ -152,7 +152,7 @@ uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi 
 #define DEFAULTGATELENGHT 5000
 #define EXTENDEDGATELENGHT 40000
 boolean thisDeck = 0;
-boolean previousDeck = 1;
+
 //triggers
 volatile int8_t gateLenghtCounter = 0;
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
@@ -282,7 +282,7 @@ boolean sampleUpdateWindow();
 boolean noOneEncoderButtonIsPressed();
 boolean onlyOneEncoderButtonIsPressed(uint8_t target);
 boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
-void eraseInstrumentRam1Pattern(uint8_t _instr);
+void eraseInstrumenThisDeckPattern(uint8_t _instr);
 void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void clearUndoArray(uint8_t _instr);
 void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
@@ -395,9 +395,9 @@ void ISRfireTimer4()
   uint8_t playMidiDeck[2] = {0, 0};                        //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {
-    uint8_t targetDeck = previousDeck; //force point to previous deck
-    if ((crossfader - 1) >= instr)     //if instrument already crossed
-      targetDeck = thisDeck;           // point to this deck
+    uint8_t targetDeck = !thisDeck; //force point to other deck
+    if ((crossfader - 1) >= instr)  //if instrument already crossed
+      targetDeck = thisDeck;        // point to this deck
     //if not permanently muted and not momentary muted and it is a valid step
     if (!permanentMute[instr] && !instrActionState[instr] && playingPatterns[targetDeck][instr][stepCount])
     {
@@ -407,8 +407,8 @@ void ISRfireTimer4()
   }
   if (playMidiDeck[thisDeck] != 0)
     playMidi(thisDeck + 1, playMidiDeck[thisDeck], MIDICHANNEL); //send midinote to this deck with binary coded trigger message
-  if (playMidiDeck[previousDeck] != 0)
-    playMidi(previousDeck + 1, playMidiDeck[previousDeck], MIDICHANNEL); //send midinote to previous deck with binary coded trigger message
+  if (playMidiDeck[!thisDeck] != 0)
+    playMidi(!thisDeck + 1, playMidiDeck[!thisDeck], MIDICHANNEL); //send midinote to other deck with binary coded trigger message
   interrupts();
   gateLenghtCounter = 0;
   stepCount++;
@@ -456,36 +456,7 @@ void loop()
   //copy selected mood to new deck
   else if (updateOledSelectMood && sampleUpdateWindow())
   {
-    //before load new mood, prepare current deck to leave it the same way user left
-    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-    {
-      //if there are instruments not morphed in the current deck , or silenced then kill any reference
-      if ((instr >= crossfader) || (permanentMute[instr] == 1))
-      {
-        for (uint8_t step = 0; step < MAXSTEPS; step++)
-          playingPatterns[thisDeck][instr][step]; //kill all playing pattern steps
-        deckSamples[thisDeck][instr]->reset();         //kill all samples pointers
-        deckPatterns[thisDeck][instr]->reset();        //kill all patterns pointers
-      }
-    }
-
-    //change decks
-    thisDeck = !thisDeck;
-    previousDeck = !previousDeck;
-
-    //reset any customization
     checkDefaultOled();
-    resetAllPermanentMute();                    //in common
-    resetAllGateLenght();                       //in common
-    restoreCustomizedPatternsToOriginalRef(); //in common
-    setAllPatternAsOriginal();                  //in common
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    {
-      deckSamples[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);              //load all samples
-      deckPatterns[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);             //load all patterns
-      copyRefPatternToThisDeckPlayingPatterns(i, deckPatterns[thisDeck][i]->getValue());                     //copy selected instrument pattern to this deck playing
-      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), deckSamples[thisDeck][i]->getValue(), MIDICHANNEL); //send MIDI to pi
-    }
     oledShowPreviousMood();
     oledShowSelectedMood();
     previousMood = selectedMood;
@@ -561,15 +532,42 @@ void loop()
   //if new mood was selected....copy reference tables or create new mood in the cross area
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
-    interfaceEvent.debounce(1000); //block any other interface event
+    //before load new mood, prepare current deck to leave it the same way user costomized
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    {
+      //if there are instruments not morphed in the current deck , or silenced then kill any reference
+      if ((instr >= crossfader) || (permanentMute[instr] == 1))
+      {
+        eraseInstrumenThisDeckPattern(instr);
+        deckSamples[thisDeck][instr]->setValue(0);  //kill all samples pointers
+        deckPatterns[thisDeck][instr]->setValue(1); //kill all patterns pointers
+        // deckSamples[thisDeck][instr]->reset();  //kill all samples pointers
+        // deckPatterns[thisDeck][instr]->reset(); //kill all patterns pointers
+      }
+    }
+    //change decks
+    thisDeck = !thisDeck;
+
+    //reset any customization
+    resetAllPermanentMute();                  //in common
+    resetAllGateLenght();                     //in common
+    restoreCustomizedPatternsToOriginalRef(); //in common
+    setAllPatternAsOriginal();                //in common
+    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    {
+      deckSamples[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);              //load all samples
+      deckPatterns[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);             //load all patterns
+      copyRefPatternToThisDeckPlayingPatterns(i, deckPatterns[thisDeck][i]->getValue());                     //copy selected instrument pattern to this deck playing
+      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), deckSamples[thisDeck][i]->getValue(), MIDICHANNEL); //send MIDI to pi
+    }
     updateOledSelectMood = true;
+    interfaceEvent.debounce(1000); //block any other interface event
   }
 
   //read all action buttons (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
-
     //if any pattern should be erased
     //cross encoder + instrument modifier + action button + not custom pattern
     if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && !isCustomPattern[i] && interfaceEvent.debounced())
@@ -582,7 +580,7 @@ void loop()
         setThisPatternAsCustom(i);
       }
       copyRefPatternToRefPattern(i, 1, deckPatterns[thisDeck][i]->getValue()); //copy empty pattern to deck 1
-      eraseInstrumentRam1Pattern(i);
+      eraseInstrumenThisDeckPattern(i);
       interfaceEvent.debounce(1000);
       updateOledEraseInstrumentPattern = i;
     }
@@ -995,7 +993,7 @@ void restoreCustomizedPatternsToOriginalRef()
 }
 
 //clear pattern from ram 1 area
-void eraseInstrumentRam1Pattern(uint8_t _instr)
+void eraseInstrumenThisDeckPattern(uint8_t _instr)
 {
   for (int8_t step = 0; step < MAXSTEPS; step++)
     playingPatterns[thisDeck][_instr][step] = 0;
