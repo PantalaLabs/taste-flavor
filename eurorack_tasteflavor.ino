@@ -1,5 +1,9 @@
 /*
-Data flow
+Taste & Flavor is an Eurorack module sequence steps, play samples and create melodies
+Creative Commons License CC-BY-SA
+Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
+under a Creative Commons Attribution-ShareAlike 4.0 International License.
+
 +---------------+
 |refPattern1    |
   +---------------+
@@ -17,11 +21,6 @@ Data flow
                                +--------------------------------+
                                                |
                                                V
-                                       actual playing instr.
-                  morphSample  <------>   actualSample   <------> encoderSampleChange
-                  morphPattern <------>   actualPattern  <------> encoderPatternChange
-                                                |
-                                           ramPatterns
 */
 
 #define DO_SERIAL false
@@ -38,6 +37,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #endif
 
 #include <PantalaDefines.h>
+#include <Counter.h>
 #include <EventDebounce.h>
 #include <Rotary.h>
 #include <DueTimer.h>
@@ -56,12 +56,12 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define MAXSTEPS 64          //max step sequence
 #define MYCHANNEL 1          //midi channel for data transmission
 #define MAXENCODERS 8        //total of encoders
-#define MOODENCODER 0        //total of sample encoders
-#define MORPHENCODER 1       //total of sample encoders
-#define MAXINSTRUMENTS 6     //total of sample encoders
+#define MOODENCODER 0        //MOOD encoder id
+#define CROSSENCODER 1       //CROSS encoder id
+#define MAXINSTRUMENTS 6     //total of instruments
 #define MIDICHANNEL 1        //standart drum midi channel
 #define MOODMIDINOTE 20      //midi note to mood message
-#define MORPHMIDINOTE 21     //midi note to morph message
+#define CROSSMIDINOTE 21     //midi note to cross message
 #define KICKCHANNEL 0
 #define SNAKERCHANNEL 1 //snare + shaker
 #define CLAPCHANNEL 2
@@ -78,7 +78,7 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define MAXINSTR2PATTERNS 3
 #define MAXINSTR3PATTERNS 4
 #define MAXINSTR4PATTERNS 3
-#define MAXINSTR5PATTERNS 3
+#define MAXINSTR5PATTERNS 4
 #define MAXINSTR6PATTERNS 2
 #define DOTGRIDINIT 36
 #define GRIDPATTERNHEIGHT 4
@@ -89,7 +89,7 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define SCLPIN 21
 #define MIDITXPIN 18
 #define ENCBUTPINMOOD 11
-#define ENCBUTPINMORPH 8
+#define ENCBUTPINCROSS 8
 #define ENCBUTPININSTR1 40
 #define ENCBUTPININSTR2 34
 #define ENCBUTPININSTR3 46
@@ -104,8 +104,8 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define TRIGOUTPIN6 27
 #define ENCPINAMOOD 13
 #define ENCPINBMOOD 12
-#define ENCPINAMORPH 10
-#define ENCPINBMORPH 9
+#define ENCPINACROSS 10
+#define ENCPINBCROSS 9
 #define ENCPINAINSTR1 38
 #define ENCPINBINSTR1 36
 #define ENCPINAINSTR2 32
@@ -125,7 +125,7 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define ACTIONPININSTR5 31
 #define ACTIONPININSTR6 25
 #define ENCBUTMOOD 0
-#define ENCBUTMORPH 1
+#define ENCBUTCROSS 1
 #define ENCBUTINSTR1 2
 #define ENCBUTINSTR2 3
 #define ENCBUTINSTR3 4
@@ -151,14 +151,15 @@ uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi 
 #define MAXGATELENGHTS 8
 #define DEFAULTGATELENGHT 5000
 #define EXTENDEDGATELENGHT 40000
-
+boolean thisDeck = 0;
+boolean previousDeck = 1;
 //triggers
 volatile int8_t gateLenghtCounter = 0;
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
 int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
-//encoders buttons : mood, morph, instruments
-uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINMORPH, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
+//encoders buttons : mood, cross, instruments
+uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
 boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t instrActionPins[MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
 boolean instrActionState[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
@@ -168,14 +169,14 @@ uint8_t sampleButtonModifier[MAXENCODERS] = {0, 0, ENCBUTINSTR2, ENCBUTINSTR1, E
 EventDebounce interfaceEvent(200); //min time in ms to accept another interface event
 
 Rotary MOODencoder(ENCPINAMOOD, ENCPINBMOOD);
-Rotary MORPHencoder(ENCPINAMORPH, ENCPINBMORPH);
+Rotary CROSSencoder(ENCPINACROSS, ENCPINBCROSS);
 Rotary instr1encoder(ENCPINAINSTR1, ENCPINBINSTR1);
 Rotary instr2encoder(ENCPINAINSTR2, ENCPINBINSTR2);
 Rotary instr3encoder(ENCPINAINSTR3, ENCPINBINSTR3);
 Rotary instr4encoder(ENCPINAINSTR4, ENCPINBINSTR4);
 Rotary instr5encoder(ENCPINAINSTR5, ENCPINBINSTR5);
 Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
-Rotary *encoders[MAXENCODERS] = {&MOODencoder, &MORPHencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
+Rotary *encoders[MAXENCODERS] = {&MOODencoder, &CROSSencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
 boolean updateOledBrowseMood = false;      //schedule some Oled update
 boolean updateOledSelectMood = false;      //schedule some Oled update
@@ -183,10 +184,9 @@ boolean updateOledUpdateBpm = false;       //update bpm
 int16_t selectedMood = 0;                  //actual selected mood
 int16_t lastSelectedMood = 255;            //prevents to execute 2 times the same action
 int8_t previousMood = 0;                   //previous mood name
-int8_t lastMorphBarGraphValue = 127;       //0 to MAXINSTRUMENTS possible values
-int8_t updateOledUpdateMorph = 0;          //schedule some Oled update
+int8_t lastCrossBarGraphValue = 127;       //0 to MAXINSTRUMENTS possible values
+int8_t updateOledUpdateCross = 0;          //schedule some Oled update
 int8_t updateOledInstrPattern = -1;        //update only one instrument pattern
-boolean updateOledEraseMoodName = false;   //erase mood name when change any original mood configuration
 int8_t updateOledChangePlayingSample = -1; //update sample on rasp pi
 int8_t updateOledUpdategateLenght = -1;    //update gate lenght on right upper corner
 int8_t updateOledEraseInstrumentPattern = -1;
@@ -196,44 +196,68 @@ boolean updateOledModifierPressed = false;
 boolean defaultOledNotActiveYet = true;
 
 #include "patterns.h"
-uint8_t sourcedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 boolean isCustomPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //sequencer
 volatile int8_t stepCount = -1;
 int8_t queuedEncoder = 0;
-//playing instrument pattern pointer
-uint16_t actualPattern[MAXINSTRUMENTS] = {1, 1, 1, 1, 1, 1};
-uint16_t maxInstrPatterns[MAXINSTRUMENTS] = {MAXINSTR1PATTERNS, MAXINSTR2PATTERNS, MAXINSTR3PATTERNS, MAXINSTR4PATTERNS, MAXINSTR5PATTERNS, MAXINSTR6PATTERNS};
-//playing instrument sample pointer
-int16_t maxInstrSamples[MAXINSTRUMENTS] = {MAXINSTR1SAMPLES, MAXINSTR2SAMPLES, MAXINSTR3SAMPLES, MAXINSTR4SAMPLES, MAXINSTR5SAMPLES, MAXINSTR6SAMPLES};
-int16_t actualSample[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+
 //mood
 #define MAXMOODS 4 //max moods
 String moodKitName[MAXMOODS] = {"", "P.Labs-Choke", "P.Labs-Empty Room", "P.Labs-April23"};
-int8_t moodKitPresetPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
+int8_t moodKitRefPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
     //s, s, s, s, s, s, p, p, p, p, p, p
     {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1}, //P.Labs-Choke
     {2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 1}, //P.Labs-Empty Room
-    {3, 3, 3, 3, 3, 1, 2, 3, 4, 2, 3, 1}  //P.Labs-April23
+    {3, 3, 3, 3, 3, 1, 2, 3, 4, 2, 4, 1}  //P.Labs-April23
 };
 
-//MORPH 6 pointer samples + 6 pointer patterns / 0 and 1 morph areas
-int8_t morphingInstr = 0;
-uint8_t morphArea[2][2 * MAXINSTRUMENTS];
-boolean ramPatterns[2][6][MAXSTEPS];
+//decks
 #define RAM 0
 #define ROM 1
+int8_t crossfader = 0;
+
+Counter deck0Sample1(MAXINSTR1SAMPLES + 1);
+Counter deck0Sample2(MAXINSTR2SAMPLES + 1);
+Counter deck0Sample3(MAXINSTR3SAMPLES + 1);
+Counter deck0Sample4(MAXINSTR4SAMPLES + 1);
+Counter deck0Sample5(MAXINSTR5SAMPLES + 1);
+Counter deck0Sample6(MAXINSTR6SAMPLES + 1);
+Counter deck1Sample1(MAXINSTR1SAMPLES + 1);
+Counter deck1Sample2(MAXINSTR2SAMPLES + 1);
+Counter deck1Sample3(MAXINSTR3SAMPLES + 1);
+Counter deck1Sample4(MAXINSTR4SAMPLES + 1);
+Counter deck1Sample5(MAXINSTR5SAMPLES + 1);
+Counter deck1Sample6(MAXINSTR6SAMPLES + 1);
+
+Counter deck0Pattern1(MAXINSTR1PATTERNS);
+Counter deck0Pattern2(MAXINSTR2PATTERNS);
+Counter deck0Pattern3(MAXINSTR3PATTERNS);
+Counter deck0Pattern4(MAXINSTR4PATTERNS);
+Counter deck0Pattern5(MAXINSTR5PATTERNS);
+Counter deck0Pattern6(MAXINSTR6PATTERNS);
+Counter deck1Pattern1(MAXINSTR1PATTERNS);
+Counter deck1Pattern2(MAXINSTR2PATTERNS);
+Counter deck1Pattern3(MAXINSTR3PATTERNS);
+Counter deck1Pattern4(MAXINSTR4PATTERNS);
+Counter deck1Pattern5(MAXINSTR5PATTERNS);
+Counter deck1Pattern6(MAXINSTR6PATTERNS);
+
+Counter *deckSamples[2][MAXINSTRUMENTS] = { //
+    {&deck0Sample1, &deck0Sample2, &deck0Sample3, &deck0Sample4, &deck0Sample5, &deck0Sample6},
+    {&deck1Sample1, &deck1Sample2, &deck1Sample3, &deck1Sample4, &deck1Sample5, &deck1Sample6}};
+Counter *deckPatterns[2][MAXINSTRUMENTS] = { //
+    {&deck0Pattern1, &deck0Pattern2, &deck0Pattern3, &deck0Pattern4, &deck0Pattern5, &deck0Pattern6},
+    {&deck1Pattern1, &deck1Pattern2, &deck1Pattern3, &deck1Pattern4, &deck1Pattern5, &deck1Pattern6}};
+
+boolean playingPatterns[2][6][MAXSTEPS]; //patterns copied from refPatterns to play with
+
 #define MAXUNDOS MAXSTEPS
 int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
 
 String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
-
-// #define MAXLOFIKICK 11
-// uint8_t lofiKick[MAXLOFIKICK] = {0, 3, 4, 12, 17, 23, 25, 42, 43, 44, 45};
-// #define MAXLOFIHAT 10
-// uint8_t lofiHihat[MAXLOFIHAT] = {6, 16, 17, 22, 24, 33, 42, 50, 53, 62};
 
 void ISRfireTimer3();
 void ISRfireTimer4();
@@ -243,7 +267,7 @@ void checkDefaultOled();
 void oledWelcome();
 void oledEraseBrowsedMoodName();
 void oledShowBrowsedMood();
-void oledShowMorphBar();
+void oledShowCrossBar();
 void oledShowCornerInfo(uint8_t _parm, int16_t _val);
 void oledEraseInstrumentPattern(uint8_t _instr);
 void oledShowInstrumPattern(uint8_t _instr, boolean _source);
@@ -251,23 +275,25 @@ void oledShowPreviousMood();
 void oledCustomMoodName();
 void oledShowSelectedMood();
 void endTriggers();
+void resetAllPermanentMute();
+void resetAllGateLenght();
+void restoreCustomizedPatternsToOriginalRef();
 boolean sampleUpdateWindow();
 boolean noOneEncoderButtonIsPressed();
 boolean onlyOneEncoderButtonIsPressed(uint8_t target);
 boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
 void eraseInstrumentRam1Pattern(uint8_t _instr);
-void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
+void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
 void clearUndoArray(uint8_t _instr);
-void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
+void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
 void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
 void setAllPatternAsOriginal();
 void setThisPatternAsOriginal(uint8_t _instr);
 void setThisPatternAsCustom(uint8_t _instr);
 void rollbackStepIntoUndoArray(uint8_t _instr);
-void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer);
-void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source);
-void copyRamPattern1ToRam0(uint8_t _instr);
-void copyRamPattern0ToRam1(uint8_t _instr);
+void copyRefPatternToThisDeckPlayingPatterns(uint8_t _instr, uint8_t _romPatternTablePointer);
+void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source);
+void copyRamPatternToRamPattern(uint8_t _src, uint8_t _trg, uint8_t _instr);
 
 void setup()
 {
@@ -303,17 +329,20 @@ void setup()
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
       undoStack[undos][instr] = -1;
 
-  for (uint8_t morph = 0; morph < 2; morph++)
-    for (uint8_t instr = 0; instr < (2 * MAXINSTRUMENTS); instr++)
-      morphArea[morph][instr] = 0;
+  for (uint8_t deck = 0; deck < 2; deck++)
+  {
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    {
+      deckPatterns[deck][instr]->setCyclable(false);
+      deckPatterns[deck][instr]->setInit(1);
+      deckSamples[deck][instr]->setCyclable(false);
+    }
+  }
 
-  for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-    morphArea[1][instr + MAXINSTRUMENTS] = 1;
-
-  for (uint8_t morph = 0; morph < 2; morph++)
+  for (uint8_t cross = 0; cross < 2; cross++)
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
       for (uint8_t step = 0; step < MAXSTEPS; step++)
-        ramPatterns[morph][instr][step] = 0;
+        playingPatterns[cross][instr][step] = 0;
 
   //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
@@ -351,15 +380,9 @@ void ISRfireTimer3()
   u_tickInterval = micros() - u_lastTick;
   u_lastTick = micros();
   if (u_timeShift >= 0)
-  {
     Timer4.start(u_timeShift);
-    //    Timer4.attachInterrupt(ISRfireTimer4);
-  }
   else
-  {
     Timer4.start(u_tickInterval + u_timeShift);
-    //    Timer4.attachInterrupt(ISRfireTimer4);
-  }
   Timer3.start(bpm2micros4ppqn(bpm));
 }
 
@@ -369,21 +392,23 @@ void ISRfireTimer4()
   noInterrupts();
   Timer5.start(DEFAULTGATELENGHT);                         //start 5ms first trigger timer
   Timer4.stop();                                           //stop timer shift
-  uint8_t playMidiValue = 0;                               //calculate final noteVelocity
+  uint8_t playMidiDeck[2] = {0, 0};                        //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
-  {                                                        //if it is not Actiond
-    uint8_t chooseMorphedOrNot = 0;                        //force point to morph area 0
-    if ((morphingInstr - 1) >= instr)                      //if instrument already morphed
-      chooseMorphedOrNot = 1;                              // point to RAM area 1
+  {
+    uint8_t targetDeck = previousDeck; //force point to previous deck
+    if ((crossfader - 1) >= instr)     //if instrument already crossed
+      targetDeck = thisDeck;           // point to this deck
     //if not permanently muted and not momentary muted and it is a valid step
-    if (!permanentMute[instr] && !instrActionState[instr] && ramPatterns[chooseMorphedOrNot][instr][stepCount])
+    if (!permanentMute[instr] && !instrActionState[instr] && playingPatterns[targetDeck][instr][stepCount])
     {
       digitalWrite(triggerPins[instr], HIGH);
-      playMidiValue = playMidiValue + powint(2, 5 - instr);
+      playMidiDeck[targetDeck] = playMidiDeck[targetDeck] + powint(2, 5 - instr); //accumulate to play this or previous instrument
     }
   }
-  if (playMidiValue != 0)
-    playMidi(1, playMidiValue, MIDICHANNEL); //send midinote with binary coded triggers message
+  if (playMidiDeck[thisDeck] != 0)
+    playMidi(thisDeck + 1, playMidiDeck[thisDeck], MIDICHANNEL); //send midinote to this deck with binary coded trigger message
+  if (playMidiDeck[previousDeck] != 0)
+    playMidi(previousDeck + 1, playMidiDeck[previousDeck], MIDICHANNEL); //send midinote to previous deck with binary coded trigger message
   interrupts();
   gateLenghtCounter = 0;
   stepCount++;
@@ -419,83 +444,53 @@ void loop()
     oledShowCornerInfo(2, bpm);
     updateOled = true;
   }
-  //update morph bar changes and there is available time to load new sample and play it
+  //update cross bar changes and there is available time to load new sample and play it
   //this could be took off if using Tsunami
-  else if ((updateOledUpdateMorph != 0) && sampleUpdateWindow())
+  else if ((updateOledUpdateCross != 0) && sampleUpdateWindow())
   {
-    //if CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
-    if (updateOledUpdateMorph == 1)
-    {
-      morphingInstr++;
-      if (morphingInstr > (MAXINSTRUMENTS + 1))
-        morphingInstr--;
-      actualSample[morphingInstr - 1] = morphArea[1][morphingInstr - 1];
-      actualPattern[morphingInstr - 1] = morphArea[1][morphingInstr - 1 + MAXINSTRUMENTS];
-      //send new sample MIDI note do PI
-      playMidi(instrSampleMidiNote[morphingInstr - 1], actualSample[morphingInstr - 1], MIDICHANNEL);
-    }
-    //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
-    else if (updateOledUpdateMorph == -1)
-    {
-      actualSample[morphingInstr - 1] = morphArea[0][morphingInstr - 1];
-      actualPattern[morphingInstr - 1] = morphArea[0][morphingInstr - 1 + MAXINSTRUMENTS];
-      //send new sample MIDI note do PI
-      playMidi(instrSampleMidiNote[morphingInstr - 1], actualSample[morphingInstr - 1], MIDICHANNEL);
-      morphingInstr--;
-      if (morphingInstr < 0)
-        morphingInstr = 0;
-    }
     checkDefaultOled();
-    oledShowMorphBar(morphingInstr);
-    updateOledUpdateMorph = 0;
+    oledShowCrossBar(crossfader);
+    updateOledUpdateCross = 0;
     updateOled = true;
   }
-  //copy selected mood to morph area
-  else if (updateOledSelectMood)
+  //copy selected mood to new deck
+  else if (updateOledSelectMood && sampleUpdateWindow())
   {
+    //before load new mood, prepare current deck to leave it the same way user left
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    {
+      //if there are instruments not morphed in the current deck , or silenced then kill any reference
+      if ((instr >= crossfader) || (permanentMute[instr] == 1))
+      {
+        for (uint8_t step = 0; step < MAXSTEPS; step++)
+          playingPatterns[thisDeck][instr][step]; //kill all playing pattern steps
+        deckSamples[thisDeck][instr]->reset();         //kill all samples pointers
+        deckPatterns[thisDeck][instr]->reset();        //kill all patterns pointers
+      }
+    }
+
+    //change decks
+    thisDeck = !thisDeck;
+    previousDeck = !previousDeck;
+
+    //reset any customization
     checkDefaultOled();
-    for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) //reset all permanet mute
-      permanentMute[pat] = 0;
+    resetAllPermanentMute();                    //in common
+    resetAllGateLenght();                       //in common
+    restoreCustomizedPatternsToOriginalRef(); //in common
+    setAllPatternAsOriginal();                  //in common
+    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+    {
+      deckSamples[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);              //load all samples
+      deckPatterns[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);             //load all patterns
+      copyRefPatternToThisDeckPlayingPatterns(i, deckPatterns[thisDeck][i]->getValue());                     //copy selected instrument pattern to this deck playing
+      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), deckSamples[thisDeck][i]->getValue(), MIDICHANNEL); //send MIDI to pi
+    }
     oledShowPreviousMood();
     oledShowSelectedMood();
-    setAllPatternAsOriginal();
-    for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
-    {
-      gateLenghtSize[pat] = 0;      //clear all gate lengh sizes
-      if (sourcedPattern[pat] != 0) //if any pattern was changed , restore it from bkp before do anything
-      {
-        copyRomPatternToRomPattern(pat, BKPPATTERN, sourcedPattern[pat]); //copy BKPd pattern to its original place
-        sourcedPattern[pat] = 0;
-      }
-    }
-    //copy selected mood samples and patterns pointers to or from morph area
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++) //for each instrument
-    {
-      //update morph area 0
-      morphArea[0][i] = actualSample[i];                   //copy playing sample to morphArea 0
-      morphArea[0][i + MAXINSTRUMENTS] = actualPattern[i]; //copy playing pattern to morphArea 0
-      copyRamPattern1ToRam0(i);                            //copy ramPattern area 1 to ramPattern area 0
-      //update morph area 1
-      //sample
-      if (moodKitPresetPointers[selectedMood][i] != -1)           //if selected mood sample set NOT to REUSE
-        morphArea[1][i] = moodKitPresetPointers[selectedMood][i]; //copy new selected mood sample to morphArea 1
-      else                                                        //else
-        morphArea[1][i] = morphArea[0][i];                        //use actual playing sample
-      //pattern
-      if (moodKitPresetPointers[selectedMood][i + MAXINSTRUMENTS] != -1) //if selected mood pattern set NOT to REUSE
-      {
-        morphArea[1][i + MAXINSTRUMENTS] = moodKitPresetPointers[selectedMood][i + MAXINSTRUMENTS]; //copy selected instrument pattern to morphArea 1
-        copyRomPatternToRam1(i, moodKitPresetPointers[selectedMood][i + MAXINSTRUMENTS]);           //copy selected instrument pattern to RAM
-      }
-      else
-      {                                                                      //else
-        morphArea[1][i + MAXINSTRUMENTS] = morphArea[0][i + MAXINSTRUMENTS]; //use actual playing pattern
-        copyRamPattern0ToRam1(i);                                            //copy IN USE ramPattern area 0 to ramPattern area 1
-      }
-    }
     previousMood = selectedMood;
-    oledShowMorphBar(-1);
-    morphingInstr = 0;
+    oledShowCrossBar(-1);
+    crossfader = 0;
     updateOledSelectMood = false;
     updateOled = true;
   }
@@ -504,29 +499,21 @@ void loop()
   else if (updateOledInstrPattern != -1)
   {
     oledShowInstrumPattern(updateOledInstrPattern, RAM);
-    oledShowCornerInfo(0, morphArea[1][updateOledInstrPattern + MAXINSTRUMENTS]);
-    if (updateOledEraseMoodName)
-    {
-      updateOledEraseMoodName = false;
-      oledCustomMoodName();
-    }
+    oledShowCornerInfo(0, deckPatterns[thisDeck][updateOledInstrPattern]->getValue());
+    oledCustomMoodName();
     updateOled = true;
     updateOledInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
   else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
   {
-    //send midi to pi to change to new sample
-    playMidi(instrSampleMidiNote[updateOledChangePlayingSample], actualSample[updateOledChangePlayingSample], MIDICHANNEL);
-    if (updateOledEraseMoodName)
-    {
-      updateOledEraseMoodName = false;
-      oledCustomMoodName();
-    }
-    oledShowCornerInfo(1, actualSample[updateOledChangePlayingSample]);
+    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deckSamples[thisDeck][updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
+    oledCustomMoodName();
+    oledShowCornerInfo(1, deckSamples[thisDeck][updateOledChangePlayingSample]->getValue());
     updateOled = true;
     updateOledChangePlayingSample = -1;
   }
+
   //if time shift changed
   else if (updateOledUpdateTimeShift)
   {
@@ -571,7 +558,7 @@ void loop()
   for (int8_t i = 0; i < MAXENCODERS; i++)
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
 
-  //if new mood was selected....copy reference tables or create new mood in the morph area
+  //if new mood was selected....copy reference tables or create new mood in the cross area
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(1000); //block any other interface event
@@ -584,40 +571,40 @@ void loop()
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
 
     //if any pattern should be erased
-    //morph encoder + instrument modifier + action button + not custom pattern
-    if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && !isCustomPattern[i] && interfaceEvent.debounced())
+    //cross encoder + instrument modifier + action button + not custom pattern
+    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && !isCustomPattern[i] && interfaceEvent.debounced())
     {
       //if this pattern wasnt BKPd yet
-      if (sourcedPattern[i] == 0)
+      if (customizedPattern[i] == 0)
       {
-        copyRomPatternToRomPattern(i, actualPattern[i], BKPPATTERN); //save actual pattern into bkp area 0
-        sourcedPattern[i] = actualPattern[i];                        //save actual playing pattern as BKPd
+        copyRefPatternToRefPattern(i, deckPatterns[thisDeck][i]->getValue(), BKPPATTERN); //save actual pattern into bkp area 0
+        customizedPattern[i] = deckPatterns[thisDeck][i]->getValue();                     //save actual playing pattern as BKPd
         setThisPatternAsCustom(i);
       }
-      copyRomPatternToRomPattern(i, 1, actualPattern[i]); //copy empty pattern to actual pattern
+      copyRefPatternToRefPattern(i, 1, deckPatterns[thisDeck][i]->getValue()); //copy empty pattern to deck 1
       eraseInstrumentRam1Pattern(i);
       interfaceEvent.debounce(1000);
       updateOledEraseInstrumentPattern = i;
     }
     //if any tap should be rollbacked
-    //morph encoder + instrument modifier + action button + custom pattern
-    else if (twoEncoderButtonsArePressed(MORPHENCODER, i + 2) && instrActionState[i] && isCustomPattern[i] && interfaceEvent.debounced())
+    //cross encoder + instrument modifier + action button + custom pattern
+    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && isCustomPattern[i] && interfaceEvent.debounced())
     {
       //if there was any rollback available
       if (undoStack[0][i] != -1)
       {
-        setStepIntoRomPattern(i, actualPattern[i], undoStack[0][i], 0); //insert new step into Rom pattern
-        setStepIntoRamPattern(i, undoStack[0][i], 0);                   //insert new step into Ram 1 pattern
-        rollbackStepIntoUndoArray(i);                                   //rollback the last saved step
-        oledShowInstrumPattern(i, RAM);                                 //update Oled with new inserted step
+        setStepIntoRefPattern(i, deckPatterns[thisDeck][i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
+        setStepIntoplayingPattern(i, undoStack[0][i], 0);                                    //insert new step into Ram 1 pattern
+        rollbackStepIntoUndoArray(i);                                                        //rollback the last saved step
+        oledShowInstrumPattern(i, RAM);                                                      //update Oled with new inserted step
         updateOled = true;
         updateOledRollbackInstrumentTap = i;
         interfaceEvent.debounce(200);
       }
     }
     //if any pattern should be permanently muted
-    //morph encoder + action button
-    else if (onlyOneEncoderButtonIsPressed(MORPHENCODER) && instrActionState[i] && interfaceEvent.debounced())
+    //cross encoder + action button
+    else if (onlyOneEncoderButtonIsPressed(CROSSENCODER) && instrActionState[i] && interfaceEvent.debounced())
     {
       permanentMute[i] = !permanentMute[i];
       interfaceEvent.debounce(1000);
@@ -644,13 +631,13 @@ void loop()
         //no need to send midinote to play this instrument because it will be saved to next step cycle
       }
       //if this pattern isnt bkp´d yet
-      if (sourcedPattern[i] == 0)
+      if (customizedPattern[i] == 0)
       {
-        copyRomPatternToRomPattern(i, actualPattern[i], BKPPATTERN); //save actual pattern into bkp area 0
-        sourcedPattern[i] = actualPattern[i];                        //save actual playing pattern as BKPd
+        copyRefPatternToRefPattern(i, deckPatterns[thisDeck][i]->getValue(), BKPPATTERN); //save actual pattern into bkp area 0
+        customizedPattern[i] = deckPatterns[thisDeck][i]->getValue();                     //save actual playing pattern as BKPd
       }
-      setStepIntoRomPattern(i, actualPattern[i], updateOledTapStep, 1); //insert new step into Rom pattern
-      setStepIntoRamPattern(i, updateOledTapStep, 1);                   //insert new step into Ram 1 pattern
+      setStepIntoRefPattern(i, deckPatterns[thisDeck][i]->getValue(), updateOledTapStep, 1); //insert new step into Rom pattern
+      setStepIntoplayingPattern(i, updateOledTapStep, 1);                                    //insert new step into Ram 1 pattern
       setStepIntoUndoArray(i, updateOledTapStep);
       setThisPatternAsCustom(i);
       updateOledTapInstrumentPattern = i;
@@ -716,35 +703,26 @@ void readEncoder(uint8_t _queued)
       }
       break;
 
-    case MORPHENCODER:
-      //if morph button AND morph button are pressed and MORPH rotate change timer shift
-      if (twoEncoderButtonsArePressed(ENCBUTMOOD, ENCBUTMORPH))
+    case CROSSENCODER:
+      //if cross button AND cross button are pressed and cross rotate change timer shift
+      if (twoEncoderButtonsArePressed(ENCBUTMOOD, ENCBUTCROSS))
       {
         u_timeShift += encoderChange * u_timeShiftStep;
         u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
         updateOledUpdateTimeShift = true;
       }
-      //if morph button is pressed and MORPH rotate CHANGE BPM
-      else if (onlyOneEncoderButtonIsPressed(ENCBUTMORPH))
+      //if cross button is pressed and cross rotate CHANGE BPM
+      else if (onlyOneEncoderButtonIsPressed(ENCBUTCROSS))
       {
         updateOledUpdateBpm = true;
         bpm += encoderChange;
         u_bpm = bpm2micros4ppqn(bpm);
       }
       else
-      { //or else , morph change
-        //CLOCKWISE : morph increased , point actual instrumentPointers morph area [1]
-        if (encoderChange == 1)
-        {
-          if (morphingInstr < MAXINSTRUMENTS) //if there was one more morphing position available
-            updateOledUpdateMorph = encoderChange;
-        }
-        //if COUNTER-CLOCKWISE : morph decreased , point actual instrumentPointers morph area [0]
-        else if (encoderChange == -1)
-        {
-          if (morphingInstr > 0) //if there was one more morphing position available
-            updateOledUpdateMorph = encoderChange;
-        }
+      { //or else , cross change
+        crossfader += encoderChange;
+        crossfader = constrain(crossfader, 0, MAXINSTRUMENTS);
+        updateOledUpdateCross = encoderChange;
       }
       break;
     default:
@@ -753,14 +731,14 @@ void readEncoder(uint8_t _queued)
       //if only one ASSOCIATED modifier pressed
       if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_queued]))
       {
-        actualSample[_instrum] += encoderChange;
-        actualSample[_instrum] = constrain(actualSample[_instrum], 0, maxInstrSamples[_instrum]);
-        // if ((_instrum) <= (morphingInstr))
-        morphArea[1][_instrum] = actualSample[_instrum];
+        if (encoderChange == -1)
+          deckSamples[thisDeck][_instrum]->reward();
+        else
+          deckSamples[thisDeck][_instrum]->advance();
+        // if ((_instrum) <= (crossfader))
         // else
-        //   morphArea[0][_instrum] = actualSample[_instrum];
+        //   deckPointers[0][_instrum] = actualSample[_instrum];
         updateOledChangePlayingSample = _instrum;
-        updateOledEraseMoodName = true;
       }
       //if only SAME button pressed , change gate lenght
       else if (onlyOneEncoderButtonIsPressed(_queued))
@@ -773,22 +751,19 @@ void readEncoder(uint8_t _queued)
       else if (noOneEncoderButtonIsPressed())
       {
         //if this pattern was tapped and BKPd , restore
-        if (sourcedPattern[_instrum] != 0)
+        if (customizedPattern[_instrum] != 0)
         {
-          copyRomPatternToRomPattern(_instrum, BKPPATTERN, actualPattern[_instrum]); //reverse BKPd pattern to rom area
+          copyRefPatternToRefPattern(_instrum, BKPPATTERN, deckPatterns[thisDeck][_instrum]->getValue()); //reverse BKPd pattern to rom area
           clearUndoArray(_instrum);
           setThisPatternAsOriginal(_instrum);
         }
-        sourcedPattern[_instrum] = 0;
-        int8_t nextRomPatternTablePointer = morphArea[1][_instrum + MAXINSTRUMENTS]; //calculate new pattern pointer for this instrument
-        nextRomPatternTablePointer += encoderChange;
-        nextRomPatternTablePointer = constrain(nextRomPatternTablePointer, 1, maxInstrPatterns[_instrum] + 1); //constrain sample pointer to1 and max samples per instrument
-        morphArea[1][_instrum + MAXINSTRUMENTS] = nextRomPatternTablePointer;                                  //update destination morph area with the new pattern value
-        if (_instrum < morphingInstr)                                                                          //if instrument not morphed , force play the selected pattern
-          actualPattern[_instrum] = morphArea[1][_instrum + MAXINSTRUMENTS];                                   //set new value
-        copyRomPatternToRam1(_instrum, morphArea[1][_instrum + MAXINSTRUMENTS]);                               //copy selected instrument pattern to RAM
-        updateOledInstrPattern = _instrum;                                                                     //flags to update this instrument on Display
-        updateOledEraseMoodName = true;
+        customizedPattern[_instrum] = 0;
+        if (encoderChange == -1)
+          deckPatterns[thisDeck][_instrum]->reward();
+        else
+          deckPatterns[thisDeck][_instrum]->advance();
+        copyRefPatternToThisDeckPlayingPatterns(_instrum, deckPatterns[thisDeck][_instrum]->getValue()); //copy selected instrument pattern to RAM
+        updateOledInstrPattern = _instrum;                                                               //flags to update this instrument on Display
       }
       break;
     }
@@ -804,7 +779,7 @@ void checkDefaultOled()
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
     oledShowBrowsedMood();
-    oledShowMorphBar(-1);
+    oledShowCrossBar(-1);
   }
 }
 
@@ -813,17 +788,17 @@ void oledWelcome()
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(F("<-- select your mood"));
-  display.println(F("    and morph it -->"));
+  display.println(F("    and cross it -->"));
 }
 
-void oledShowMorphBar(int8_t _size) //update morphing status / 6 steps of 10 pixels each
+void oledShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
 {
-  if (lastMorphBarGraphValue != _size)
+  if (lastCrossBarGraphValue != _size)
   {
     display.fillRect(1, 1, 58, TEXTLINE_HEIGHT - 4, BLACK);
     for (int8_t i = 0; i < _size; i++)
       display.fillRect(10 * i, 0, 10, TEXTLINE_HEIGHT - 2, WHITE);
-    lastMorphBarGraphValue = _size;
+    lastCrossBarGraphValue = _size;
   }
 }
 
@@ -887,47 +862,48 @@ void oledShowBrowsedMood() //update almost all bottom Oled area with the name of
 void oledShowInstrumPattern(uint8_t _instr, boolean _source)
 {
   boolean mustPrintStep = false;
-  uint8_t targetPattern = moodKitPresetPointers[selectedMood][_instr + MAXINSTRUMENTS];
+  uint8_t referencePattern = moodKitRefPointers[selectedMood][_instr + MAXINSTRUMENTS];
   oledEraseInstrumentPattern(_instr);
   display.setTextColor(WHITE);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
     mustPrintStep = false;
-    if ((_source == RAM) && (ramPatterns[1][_instr][step])) //if source = RAM
+    //source = customized pattern and it is a valid pattern
+    if ((_source == RAM) && (playingPatterns[thisDeck][_instr][step])) //if source = RAM
     {
       mustPrintStep = true;
     }
-    //source = ROM and a valid pattern > 0
-    else if ((_source == ROM) && (targetPattern > 0))
+    //source = reference patterns and a valid pattern
+    else if ((_source == ROM) && (referencePattern > 0))
     {
       if (_instr == KICKCHANNEL)
       {
-        if (refPattern1[targetPattern][step]) //if it is an active step
+        if (refPattern1[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
       else if (_instr == SNAKERCHANNEL)
       {
-        if (refPattern2[targetPattern][step]) //if it is an active step
+        if (refPattern2[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
       else if (_instr == CLAPCHANNEL)
       {
-        if (refPattern3[targetPattern][step]) //if it is an active step
+        if (refPattern3[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
       else if (_instr == HATCHANNEL)
       {
-        if (refPattern4[targetPattern][step]) //if it is an active step
+        if (refPattern4[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
       else if (_instr == OHHRIDECHANNEL)
       {
-        if (refPattern5[targetPattern][step]) //if it is an active step
+        if (refPattern5[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
       else
       {
-        if (refPattern6[targetPattern][step]) //if it is an active step
+        if (refPattern6[referencePattern][step]) //if it is an active step
           mustPrintStep = true;
       }
     }
@@ -994,15 +970,39 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
   return true;
 }
 
+void resetAllGateLenght()
+{
+  for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++)
+    gateLenghtSize[pat] = 0; //clear all gate lengh sizes
+}
+
+void resetAllPermanentMute()
+{
+  for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++)
+    permanentMute[pat] = 0;
+}
+
+void restoreCustomizedPatternsToOriginalRef()
+{
+  for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
+  {
+    if (customizedPattern[pat] != 0) //if any pattern was customized , restore it from bkp before do anything
+    {
+      copyRefPatternToRefPattern(pat, BKPPATTERN, customizedPattern[pat]); //restore BKPd pattern to its original place
+      customizedPattern[pat] = 0;
+    }
+  }
+}
+
 //clear pattern from ram 1 area
 void eraseInstrumentRam1Pattern(uint8_t _instr)
 {
   for (int8_t step = 0; step < MAXSTEPS; step++)
-    ramPatterns[1][_instr][step] = 0;
+    playingPatterns[thisDeck][_instr][step] = 0;
 }
 
 //save tapped step into respective rom table
-void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
+void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
 {
   if (_instr == KICKCHANNEL)
     refPattern1[_pattern][_step] = _val;
@@ -1018,9 +1018,9 @@ void setStepIntoRomPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint
     refPattern6[_pattern][_step] = _val;
 }
 
-void setStepIntoRamPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
+void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
 {
-  ramPatterns[1][_instr][_step] = _val; //save tapped step
+  playingPatterns[thisDeck][_instr][_step] = _val; //save tapped step
 }
 
 void clearUndoArray(uint8_t _instr)
@@ -1062,7 +1062,7 @@ void rollbackStepIntoUndoArray(uint8_t _instr)
 uint8_t lastCopied_instr;
 uint8_t lastCopied_PatternTablePointer;
 //copy selected instrument pattern from ROM to RAM
-void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer)
+void copyRefPatternToThisDeckPlayingPatterns(uint8_t _instr, uint8_t _romPatternTablePointer)
 {
   //code repeat protection
   if ((lastCopied_instr == _instr) && (lastCopied_PatternTablePointer == _romPatternTablePointer))
@@ -1072,22 +1072,22 @@ void copyRomPatternToRam1(uint8_t _instr, uint8_t _romPatternTablePointer)
   for (uint8_t i = 0; i < MAXSTEPS; i++)
   {
     if (_instr == KICKCHANNEL)
-      ramPatterns[1][_instr][i] = refPattern1[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern1[_romPatternTablePointer][i];
     else if (_instr == SNAKERCHANNEL)
-      ramPatterns[1][_instr][i] = refPattern2[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern2[_romPatternTablePointer][i];
     else if (_instr == CLAPCHANNEL)
-      ramPatterns[1][_instr][i] = refPattern3[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern3[_romPatternTablePointer][i];
     else if (_instr == HATCHANNEL)
-      ramPatterns[1][_instr][i] = refPattern4[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern4[_romPatternTablePointer][i];
     else if (_instr == OHHRIDECHANNEL)
-      ramPatterns[1][_instr][i] = refPattern5[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern5[_romPatternTablePointer][i];
     else
-      ramPatterns[1][_instr][i] = refPattern6[_romPatternTablePointer][i];
+      playingPatterns[thisDeck][_instr][i] = refPattern6[_romPatternTablePointer][i];
   }
 }
 
 //copy selected instrument pattern from ROM to ROM
-void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
+void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
 {
   for (uint8_t i = 0; i < MAXSTEPS; i++)
   {
@@ -1106,18 +1106,11 @@ void copyRomPatternToRomPattern(uint8_t _instr, uint8_t _source, uint8_t _target
   }
 }
 
-//copy ramPattern area 1 to ramPattern area 0
-void copyRamPattern1ToRam0(uint8_t _instr)
+//copy ramPattern form src area to trg
+void copyRamPatternToRamPattern(uint8_t _src, uint8_t _trg, uint8_t _instr)
 {
   for (uint8_t i = 0; i < MAXSTEPS; i++)
-    ramPatterns[0][_instr][i] = ramPatterns[1][_instr][i];
-}
-
-//copy ramPattern area 0 to ramPattern area 1
-void copyRamPattern0ToRam1(uint8_t _instr)
-{
-  for (uint8_t i = 0; i < MAXSTEPS; i++)
-    ramPatterns[1][_instr][i] = ramPatterns[0][_instr][i];
+    playingPatterns[_trg][_instr][i] = playingPatterns[_src][_instr][i];
 }
 
 #ifdef DO_MIDIUSB
