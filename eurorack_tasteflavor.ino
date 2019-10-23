@@ -3,24 +3,6 @@ Taste & Flavor is an Eurorack module sequence steps, play samples and create mel
 Creative Commons License CC-BY-SA
 Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
-
-+---------------+
-|refPattern1    |
-  +---------------+
-  |refPattern2    |      -----+
-        ...                   |
-    +---------------+         |
-    |refPattern6    |         |
-    +---------------+         |
-                              |
-                              V
-                   +--------------------+            +-------------------+          +---------------------+
-                   |instrXPatternPointer|            |instrXsamplePointer| <--------|rpi available sample |
-                   +--------------------+            +-------------------+          +---------------------+
-                               |                                |
-                               +--------------------------------+
-                                               |
-                                               V
 */
 
 #define DO_SERIAL false
@@ -75,8 +57,8 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define MAXINSTR5SAMPLES 5
 #define MAXINSTR6SAMPLES 3
 #define MAXINSTR1PATTERNS 2 //remember to discard the [0] position reserved to BKP a pattern
-#define MAXINSTR2PATTERNS 3
-#define MAXINSTR3PATTERNS 4
+#define MAXINSTR2PATTERNS 4
+#define MAXINSTR3PATTERNS 5
 #define MAXINSTR4PATTERNS 3
 #define MAXINSTR5PATTERNS 4
 #define MAXINSTR6PATTERNS 2
@@ -196,8 +178,8 @@ boolean updateOledModifierPressed = false;
 boolean defaultOledNotActiveYet = true;
 
 #include "patterns.h"
-uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 boolean isCustomPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //sequencer
 volatile int8_t stepCount = -1;
@@ -209,9 +191,9 @@ String moodKitName[MAXMOODS] = {"", "P.Labs-Choke", "P.Labs-Empty Room", "P.Labs
 int8_t moodKitRefPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
     //s, s, s, s, s, s, p, p, p, p, p, p
     {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
-    {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1}, //P.Labs-Choke
-    {2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 1}, //P.Labs-Empty Room
-    {3, 3, 3, 3, 3, 1, 2, 3, 4, 2, 4, 1}  //P.Labs-April23
+    {2, 2, 2, 2, 2, 2, 2, 3, 4, 2, 4, 1}, //P.Labs-Choke
+    {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1}, //P.Labs-Empty Room
+    {3, 3, 3, 3, 3, 1, 2, 3, 3, 3, 3, 1}  //P.Labs-April23
 };
 
 //decks
@@ -219,18 +201,18 @@ int8_t moodKitRefPointers[MAXMOODS][(2 * MAXINSTRUMENTS)] = {
 #define ROM 1
 int8_t crossfader = 0;
 
-Counter deck0Sample1(MAXINSTR1SAMPLES + 1);
-Counter deck0Sample2(MAXINSTR2SAMPLES + 1);
-Counter deck0Sample3(MAXINSTR3SAMPLES + 1);
-Counter deck0Sample4(MAXINSTR4SAMPLES + 1);
-Counter deck0Sample5(MAXINSTR5SAMPLES + 1);
-Counter deck0Sample6(MAXINSTR6SAMPLES + 1);
-Counter deck1Sample1(MAXINSTR1SAMPLES + 1);
-Counter deck1Sample2(MAXINSTR2SAMPLES + 1);
-Counter deck1Sample3(MAXINSTR3SAMPLES + 1);
-Counter deck1Sample4(MAXINSTR4SAMPLES + 1);
-Counter deck1Sample5(MAXINSTR5SAMPLES + 1);
-Counter deck1Sample6(MAXINSTR6SAMPLES + 1);
+Counter deck0Sample1(MAXINSTR1SAMPLES);
+Counter deck0Sample2(MAXINSTR2SAMPLES);
+Counter deck0Sample3(MAXINSTR3SAMPLES);
+Counter deck0Sample4(MAXINSTR4SAMPLES);
+Counter deck0Sample5(MAXINSTR5SAMPLES);
+Counter deck0Sample6(MAXINSTR6SAMPLES);
+Counter deck1Sample1(MAXINSTR1SAMPLES);
+Counter deck1Sample2(MAXINSTR2SAMPLES);
+Counter deck1Sample3(MAXINSTR3SAMPLES);
+Counter deck1Sample4(MAXINSTR4SAMPLES);
+Counter deck1Sample5(MAXINSTR5SAMPLES);
+Counter deck1Sample6(MAXINSTR6SAMPLES);
 
 Counter deck0Pattern1(MAXINSTR1PATTERNS);
 Counter deck0Pattern2(MAXINSTR2PATTERNS);
