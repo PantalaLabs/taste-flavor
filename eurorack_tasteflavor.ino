@@ -275,7 +275,6 @@ void setThisPatternAsCustom(uint8_t _instr);
 void rollbackStepIntoUndoArray(uint8_t _instr);
 void copyRefPatternToThisDeckPlayingPatterns(uint8_t _instr, uint8_t _romPatternTablePointer);
 void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source);
-void copyRamPatternToRamPattern(uint8_t _src, uint8_t _trg, uint8_t _instr);
 
 void setup()
 {
@@ -1042,6 +1041,7 @@ void rollbackStepIntoUndoArray(uint8_t _instr)
 uint8_t lastCopied_instr;
 uint8_t lastCopied_PatternTablePointer;
 //copy selected instrument pattern from ROM to RAM
+
 void copyRefPatternToThisDeckPlayingPatterns(uint8_t _instr, uint8_t _romPatternTablePointer)
 {
   //code repeat protection
@@ -1071,26 +1071,19 @@ void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target
 {
   for (uint8_t i = 0; i < MAXSTEPS; i++)
   {
-    if (_instr == KICKCHANNEL)
+    if (_instr == 0)
       refPattern1[_target][i] = refPattern1[_source][i];
-    else if (_instr == SNAKERCHANNEL)
+    else if (_instr == 1)
       refPattern2[_target][i] = refPattern2[_source][i];
-    else if (_instr == CLAPCHANNEL)
+    else if (_instr == 2)
       refPattern3[_target][i] = refPattern3[_source][i];
-    else if (_instr == HATCHANNEL)
+    else if (_instr == 3)
       refPattern4[_target][i] = refPattern4[_source][i];
-    else if (_instr == OHHRIDECHANNEL)
+    else if (_instr == 4)
       refPattern5[_target][i] = refPattern5[_source][i];
-    else
+    else if (_instr == 5)
       refPattern6[_target][i] = refPattern6[_source][i];
   }
-}
-
-//copy ramPattern form src area to trg
-void copyRamPatternToRamPattern(uint8_t _src, uint8_t _trg, uint8_t _instr)
-{
-  for (uint8_t i = 0; i < MAXSTEPS; i++)
-    playingPatterns[_trg][_instr][i] = playingPatterns[_src][_instr][i];
 }
 
 #ifdef DO_MIDIUSB
