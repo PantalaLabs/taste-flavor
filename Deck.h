@@ -21,7 +21,7 @@
 #define MAXINSTR4PATTERNS 3
 #define MAXINSTR5PATTERNS 4
 #define MAXINSTR6PATTERNS 2
-#define BKP_PATTERN 0
+#define BKPPATTERN 0
 #define MAXGATELENGHTS 8
 #define DEFAULTGATELENGHT 5000
 #define EXTENDEDGATELENGHT 40000
@@ -35,26 +35,21 @@ public:
   Deck();
   Counter *deckSamples[MAXINSTRUMENTS];
   Counter *deckPatterns[MAXINSTRUMENTS];
-  int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
-  boolean playingPatterns[MAXINSTRUMENTS][MAXSTEPS]; //actual ref or customized playing Patterns
-  boolean customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+  uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+  uint8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   boolean permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   void cue(uint8_t s1, uint8_t s2, uint8_t s3, uint8_t s4, uint8_t s5, uint8_t s6, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6);
-  void resetCustomizedPatterns();
+  void changePattern(uint8_t _instr, uint8_t _val);
+  void bkpPatternToCustomize(uint8_t _instr, uint8_t _source);
+
+  void resetAllCustomizedPatterns();
   void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target);
-  void copyRamPatternToRamPattern(uint8_t src, uint8_t trg, uint8_t instr);
-  //void copyRefPatternToPlayingPatterns(uint8_t _instr, uint8_t _romPatternTablePointer);
+
   void setAllPatternAsOriginal();
   void setThisPatternAsOriginal(uint8_t _instr);
-  void eraseInstrumentPattern(uint8_t _instr);
-  void restoreCustomizedPatternsToOriginalRef();
+  void eraseInstrumentPattern(uint8_t _instr, uint8_t _pat);
   void resetAllPermanentMute();
   void resetAllGateLenght();
-
-private:
-  void init();
-  uint8_t lastCopied_instr;
-  uint8_t lastCopied_PatternTablePointer;
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
@@ -124,6 +119,13 @@ private:
       {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}  //1010
   };
   boolean *refPatterns[MAXINSTRUMENTS] = {&refPattern1[0][0], &refPattern2[0][0], &refPattern3[0][0], &refPattern4[0][0], &refPattern5[0][0], &refPattern6[0][0]};
+
+
+private:
+  void init();
+  uint8_t lastCopied_instr;
+  uint8_t lastCopied_PatternTablePointer;
+
 };
 
 #endif
