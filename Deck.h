@@ -38,28 +38,28 @@ public:
   Counter *deckPatterns[MAXINSTRUMENTS];
   uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
-  boolean permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+  byte permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   //tested
   byte isThisStepActive(uint8_t _instr, uint8_t _step);
-
   void cue(uint8_t s1, uint8_t s2, uint8_t s3, uint8_t s4, uint8_t s5, uint8_t s6, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6);
   void changeGateLenghSize(uint8_t _instrum, int8_t _change);
+  void eraseInstrumentPattern(uint8_t _instr, uint8_t _pat);
+  void customizeInstrumentPattern(uint8_t _instr, uint8_t _pat);
 
+  //not tested
   void changePattern(uint8_t _instr, uint8_t _val);
   void bkpPatternToCustomize(uint8_t _instr, uint8_t _source);
-
-  void resetAllCustomizedPatterns();
   void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target);
-
   void setAllPatternAsOriginal();
   void setThisPatternAsOriginal(uint8_t _instr);
-  void eraseInstrumentPattern(uint8_t _instr, uint8_t _pat);
   void resetAllPermanentMute();
   void resetAllGateLenght();
-  void setThisPatternAsOriginal(uint8_t _instr, boolean _orig);
+  void setThisPatternAsOriginal(uint8_t _instr, byte _orig);
 
 private:
   void init();
+  void resetAllCustomizedPatterns();
+  uint8_t isThisCustomPattern(uint8_t _instr);
   uint8_t lastCopied_instr;
   uint8_t lastCopied_PatternTablePointer;
 
