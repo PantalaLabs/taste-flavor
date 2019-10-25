@@ -29,6 +29,7 @@
 #include "Arduino.h"
 #include "Counter.h"
 #include "PantalaDefines.h"
+
 class Deck
 {
 public:
@@ -36,9 +37,14 @@ public:
   Counter *deckSamples[MAXINSTRUMENTS];
   Counter *deckPatterns[MAXINSTRUMENTS];
   uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
-  uint8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+  int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   boolean permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+  //tested
+  byte isThisStepActive(uint8_t _instr, uint8_t _step);
+
   void cue(uint8_t s1, uint8_t s2, uint8_t s3, uint8_t s4, uint8_t s5, uint8_t s6, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6);
+  void changeGateLenghSize(uint8_t _instrum, int8_t _change);
+
   void changePattern(uint8_t _instr, uint8_t _val);
   void bkpPatternToCustomize(uint8_t _instr, uint8_t _source);
 
@@ -50,10 +56,16 @@ public:
   void eraseInstrumentPattern(uint8_t _instr, uint8_t _pat);
   void resetAllPermanentMute();
   void resetAllGateLenght();
+  void setThisPatternAsOriginal(uint8_t _instr, boolean _orig);
+
+private:
+  void init();
+  uint8_t lastCopied_instr;
+  uint8_t lastCopied_PatternTablePointer;
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern1[MAXINSTR1PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern0[MAXINSTR1PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -63,7 +75,7 @@ public:
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern2[MAXINSTR2PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern1[MAXINSTR2PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -75,7 +87,7 @@ public:
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern3[MAXINSTR3PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern2[MAXINSTR3PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -88,7 +100,7 @@ public:
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern4[MAXINSTR4PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern3[MAXINSTR4PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -99,7 +111,7 @@ public:
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern5[MAXINSTR5PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern4[MAXINSTR5PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -111,21 +123,21 @@ public:
 
   //position [0] reserved to BKP pattern
   //position [1] reserved to "MUTE" pattern
-  boolean refPattern6[MAXINSTR6PATTERNS + 1][MAXSTEPS] = {
+  byte refPattern5[MAXINSTR6PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
       {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}  //1010
   };
-  boolean *refPatterns[MAXINSTRUMENTS] = {&refPattern1[0][0], &refPattern2[0][0], &refPattern3[0][0], &refPattern4[0][0], &refPattern5[0][0], &refPattern6[0][0]};
 
-
-private:
-  void init();
-  uint8_t lastCopied_instr;
-  uint8_t lastCopied_PatternTablePointer;
-
+  //https://forum.arduino.cc/index.php?topic=642706.0
+  //easy acessible by :
+  //refPatterns[instrument][pattern][step];
+  byte (*refPatterns[6])[MAXSTEPS] = {refPattern0, refPattern1, refPattern2, refPattern3, refPattern4, refPattern5};
+  //or
+  //byte *refPatterns[MAXINSTRUMENTS] = {&refPattern0[0][0], &refPattern1[0][0], &refPattern2[0][0], &refPattern3[0][0], &refPattern4[0][0], &refPattern5[0][0]};
+  //return refPatterns[_instr][deckPatterns[_instr]->getValue() * MAXSTEPS + _step];
 };
 
 #endif

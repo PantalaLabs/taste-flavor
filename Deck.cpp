@@ -53,6 +53,12 @@ void Deck::cue(uint8_t s1, uint8_t s2, uint8_t s3, uint8_t s4, uint8_t s5, uint8
   deckPatterns[5]->setValue(p6);
 }
 
+void Deck::changeGateLenghSize(uint8_t _instrum, int8_t _change)
+{
+  gateLenghtSize[_instrum] += (_change == 1) ? 1 : -1;
+  gateLenghtSize[_instrum] = constrain(gateLenghtSize[_instrum], 0, MAXGATELENGHTS);
+}
+
 void Deck::resetAllCustomizedPatterns()
 {
   for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
@@ -79,10 +85,13 @@ void Deck::changePattern(uint8_t _instr, uint8_t _val)
 
 void Deck::copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
 {
-  boolean **thisPattern;
-  thisPattern = &refPatterns[_instr];
-  for (uint8_t i = 0; i < MAXSTEPS; i++)
-    thisPattern[_target][i] = thisPattern[_source][i];
+  for (uint8_t step = 0; step < MAXSTEPS; step++)
+    refPatterns[_instr][_target][step] = refPatterns[_instr][_source][step];
+}
+
+byte Deck::isThisStepActive(uint8_t _instr, uint8_t _step)
+{
+  return refPatterns[_instr][deckPatterns[_instr]->getValue()][_step];
 }
 
 void Deck::resetAllGateLenght()
@@ -99,20 +108,17 @@ void Deck::resetAllPermanentMute()
 
 void Deck::eraseInstrumentPattern(uint8_t _instr, uint8_t _pat)
 {
-  boolean **thisPattern;
-  thisPattern = &refPatterns[_instr];
-  bkpPatternToCustomize(_instr, _pat);
   for (int8_t step = 0; step < MAXSTEPS; step++)
-    thisPattern[_instr][step] = 0;
+    refPatterns[_instr][_pat][step] = 0;
 }
 
 void Deck::setAllPatternAsOriginal()
 {
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    setThisPatternAsOriginal(i);
+    setThisPatternAsOriginal(i, 0);
 }
 
-void Deck::setThisPatternAsOriginal(uint8_t _instr)
+void Deck::setThisPatternAsOriginal(uint8_t _instr, boolean _orig)
 {
-  customizedPattern[_instr] = 0;
+  customizedPattern[_instr] = _orig;
 }

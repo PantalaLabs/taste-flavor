@@ -5,7 +5,7 @@ Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
-#define DO_SERIAL false
+#define DO_SERIAL true
 #define DO_MIDIUSB false
 #define DO_MIDIHW true
 
@@ -23,6 +23,11 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #include <EventDebounce.h>
 #include <Rotary.h>
 #include <DueTimer.h>
+#include "Deck.h"
+
+Deck deckA();
+Deck deckB();
+Deck *deck[2];
 
 #define I2C_ADDRESS 0x3C
 #define DISPLAY_WIDTH 128 // OLED Oled width, in pixels
@@ -182,7 +187,7 @@ boolean isCustomPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 uint8_t customizedPattern[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 //sequencer
-volatile int8_t stepCount = -1;
+volatile int8_t stepCount = 0;
 int8_t queuedEncoder = 0;
 
 //mood
@@ -287,6 +292,9 @@ void setup()
   Serial.println("Debugging..");
 #endif
 
+  deck[0] = new Deck();
+  deck[1] = new Deck();
+
   //pinMode(TRIGGERINPIN, INPUT);
   //triggerIn.attachCallOnRising(ISRfireTimer3);
 
@@ -304,7 +312,20 @@ void setup()
 
   //start all trigger out pins
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+  {
     pinMode(triggerPins[i], OUTPUT);
+    digitalWrite(triggerPins[i], LOW);
+  }
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+  {
+    digitalWrite(triggerPins[i], HIGH);
+    delay(300);
+  }
+  for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+  {
+    digitalWrite(triggerPins[i], LOW);
+    delay(300);
+  }
 
   for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
@@ -376,11 +397,12 @@ void ISRfireTimer4()
   uint8_t playMidiDeck[2] = {0, 0};                        //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {
-    uint8_t targetDeck = !thisDeck; //force point to other deck
+    boolean targetDeck = !thisDeck; //force point to other deck
     if ((crossfader - 1) >= instr)  //if instrument already crossed
       targetDeck = thisDeck;        // point to this deck
-    //if not permanently muted and not momentary muted and it is a valid step
-    if (!permanentMute[instr] && !instrActionState[instr] && playingPatterns[targetDeck][instr][stepCount])
+                                    //if not permanently muted and not momentary muted and it is a valid step
+    //    if (!permanentMute[instr] && !instrActionState[instr] && playingPatterns[targetDeck][instr][stepCount])
+    if (!deck[targetDeck]->permanentMute[instr] && !instrActionState[instr] && deck[targetDeck]->isThisStepActive(instr, stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
       playMidiDeck[targetDeck] = playMidiDeck[targetDeck] + powint(2, 5 - instr); //accumulate to play this or previous instrument
@@ -459,9 +481,9 @@ void loop()
   //if sampler changed and there is available time to update screen
   else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
   {
-    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deckSamples[thisDeck][updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
+    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
     oledCustomMoodName();
-    oledShowCornerInfo(1, deckSamples[thisDeck][updateOledChangePlayingSample]->getValue());
+    oledShowCornerInfo(1, deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue());
     updateOled = true;
     updateOledChangePlayingSample = -1;
   }
@@ -516,31 +538,32 @@ void loop()
     //before load new mood, prepare current deck to leave it the same way user costomized
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
     {
-      //if there are instruments not morphed in the current deck , or silenced then kill any reference
+      //if there were some instrument not morphed in the current deck then set reference to 0
       if ((instr >= crossfader) || (permanentMute[instr] == 1))
       {
-        eraseInstrumenThisDeckPattern(instr);
-        deckSamples[thisDeck][instr]->setValue(0);  //kill all samples pointers
-        deckPatterns[thisDeck][instr]->setValue(1); //kill all patterns pointers
-        // deckSamples[thisDeck][instr]->reset();  //kill all samples pointers
-        // deckPatterns[thisDeck][instr]->reset(); //kill all patterns pointers
+        deck[thisDeck]->deckSamples[instr]->setValue(0);  //sample pointer to 0
+        deck[thisDeck]->deckPatterns[instr]->setValue(1); //pattern pointers to 1
       }
     }
     //change decks
     thisDeck = !thisDeck;
-
-    //reset any customization
-    resetAllPermanentMute();                  //in common
-    resetAllGateLenght();                     //in common
-    restoreCustomizedPatternsToOriginalRef(); //in common
-    setAllPatternAsOriginal();                //in common
+    deck[thisDeck]->cue(moodKitRefPointers[selectedMood][0],  //
+                        moodKitRefPointers[selectedMood][1],  //
+                        moodKitRefPointers[selectedMood][2],  //
+                        moodKitRefPointers[selectedMood][3],  //
+                        moodKitRefPointers[selectedMood][4],  //
+                        moodKitRefPointers[selectedMood][5],  //
+                        moodKitRefPointers[selectedMood][6],  //
+                        moodKitRefPointers[selectedMood][7],  //
+                        moodKitRefPointers[selectedMood][8],  //
+                        moodKitRefPointers[selectedMood][9],  //
+                        moodKitRefPointers[selectedMood][10], //
+                        moodKitRefPointers[selectedMood][11]  //
+    );
+    //send MIDI to pi
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    {
-      deckSamples[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);              //load all samples
-      deckPatterns[thisDeck][i]->setValue(moodKitRefPointers[selectedMood][i + MAXINSTRUMENTS]);             //load all patterns
-      copyRefPatternToThisDeckPlayingPatterns(i, deckPatterns[thisDeck][i]->getValue());                     //copy selected instrument pattern to this deck playing
-      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), deckSamples[thisDeck][i]->getValue(), MIDICHANNEL); //send MIDI to pi
-    }
+      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), moodKitRefPointers[selectedMood][i], MIDICHANNEL);
+
     updateOledSelectMood = true;
     interfaceEvent.debounce(1000); //block any other interface event
   }
@@ -711,19 +734,15 @@ void readEncoder(uint8_t _queued)
       if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_queued]))
       {
         if (encoderChange == -1)
-          deckSamples[thisDeck][_instrum]->reward();
+          deck[thisDeck]->deckSamples[_instrum]->reward();
         else
-          deckSamples[thisDeck][_instrum]->advance();
-        // if ((_instrum) <= (crossfader))
-        // else
-        //   deckPointers[0][_instrum] = actualSample[_instrum];
+          deck[thisDeck]->deckSamples[_instrum]->advance();
         updateOledChangePlayingSample = _instrum;
       }
       //if only SAME button pressed , change gate lenght
       else if (onlyOneEncoderButtonIsPressed(_queued))
       {
-        gateLenghtSize[_instrum] += encoderChange;
-        gateLenghtSize[_instrum] = constrain(gateLenghtSize[_instrum], 0, MAXGATELENGHTS);
+        deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
         updateOledUpdategateLenght = _instrum;
       }
       //if no modifier pressed , only change instrument pattern , schedule event
@@ -732,17 +751,17 @@ void readEncoder(uint8_t _queued)
         //if this pattern was tapped and BKPd , restore
         if (customizedPattern[_instrum] != 0)
         {
-          copyRefPatternToRefPattern(_instrum, BKPPATTERN, deckPatterns[thisDeck][_instrum]->getValue()); //reverse BKPd pattern to rom area
+          copyRefPatternToRefPattern(_instrum, BKPPATTERN, deck[thisDeck]->deckPatterns[_instrum]->getValue()); //reverse BKPd pattern to rom area
           clearUndoArray(_instrum);
           setThisPatternAsOriginal(_instrum);
         }
         customizedPattern[_instrum] = 0;
         if (encoderChange == -1)
-          deckPatterns[thisDeck][_instrum]->reward();
+          deck[thisDeck]->deckPatterns[_instrum]->reward();
         else
-          deckPatterns[thisDeck][_instrum]->advance();
-        copyRefPatternToThisDeckPlayingPatterns(_instrum, deckPatterns[thisDeck][_instrum]->getValue()); //copy selected instrument pattern to RAM
-        updateOledInstrPattern = _instrum;                                                               //flags to update this instrument on Display
+          deck[thisDeck]->deckPatterns[_instrum]->advance();
+        copyRefPatternToThisDeckPlayingPatterns(_instrum, deck[thisDeck]->deckPatterns[_instrum]->getValue()); //copy selected instrument pattern to RAM
+        updateOledInstrPattern = _instrum;                                                                     //flags to update this instrument on Display
       }
       break;
     }
