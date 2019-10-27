@@ -35,7 +35,7 @@ public:
   Deck();
   Counter *deckSamples[MAXINSTRUMENTS];
   Counter *deckPatterns[MAXINSTRUMENTS];
-  Patterns *patterns;
+  Patterns *pattern;
   int8_t gateLenghtSize[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   byte permanentMute[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
   void cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6);

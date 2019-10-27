@@ -24,10 +24,8 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #include <DueTimer.h>
 #include "Deck.h"
 
-Deck deckA();
-Deck deckB();
 Deck *deck[2];
-Patterns *browsePattern;
+Patterns *pattern;
 
 #define I2C_ADDRESS 0x3C
 #define DISPLAY_WIDTH 128 // OLED Oled width, in pixels
@@ -178,7 +176,7 @@ int8_t queuedEncoder = 0;
 //mood
 #define MAXMOODS 4 //max moods
 String moodKitName[MAXMOODS] = {"", "P.Labs-Choke", "P.Labs-Empty Room", "P.Labs-April23"};
-int8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
+uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {2, 3, 4, 2, 4, 1}, //P.Labs-Choke
     {2, 2, 2, 2, 2, 1}, //P.Labs-Empty Room
@@ -193,8 +191,6 @@ int8_t crossfader = 0;
 #define MAXUNDOS MAXSTEPS
 int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
 
-String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
-
 void ISRfireTimer3();
 void ISRfireTimer4();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
@@ -205,25 +201,22 @@ void oledEraseBrowsedMoodName();
 void oledShowBrowsedMood();
 void oledShowCrossBar();
 void oledShowCornerInfo(uint8_t _parm, int16_t _val);
-void oledShowInstrumPattern(uint8_t _instr, uint8_t _pat, byte _src);
+void oledShowInstrPattern(uint8_t _instr, boolean _src);
 void oledShowPreviousMood();
 void oledCustomMoodName();
 void oledShowSelectedMood();
 void endTriggers();
 
-byte crossfadedDeck(uint8_t _instr);
-boolean sampleUpdateWindow();
-
-boolean noOneEncoderButtonIsPressed();
-boolean onlyOneEncoderButtonIsPressed(uint8_t target);
-boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
-
-void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
-void clearUndoArray(uint8_t _instr);
-void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
-void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
-
-void rollbackStepIntoUndoArray(uint8_t _instr);
+// boolean crossfadedDeck(uint8_t _instr);
+// boolean sampleUpdateWindow();
+// boolean noOneEncoderButtonIsPressed();
+// boolean onlyOneEncoderButtonIsPressed(uint8_t _target);
+// boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
+// void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
+// void clearUndoArray(uint8_t _instr);
+// void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
+// void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
+// void rollbackStepIntoUndoArray(uint8_t _instr);
 
 void setup()
 {
@@ -238,8 +231,7 @@ void setup()
 
   deck[0] = new Deck();
   deck[1] = new Deck();
-
-  browsePattern - new Patterns();
+  pattern = new Patterns();
 
   //pinMode(TRIGGERINPIN, INPUT);
   //triggerIn.attachCallOnRising(ISRfireTimer3);
@@ -320,7 +312,7 @@ void ISRfireTimer3()
 }
 
 //return if this instrument belongs to this or not to this deck
-byte crossfadedDeck(uint8_t _instr)
+boolean crossfadedDeck(uint8_t _instr)
 {
   return (_instr < crossfader) ? thisDeck : !thisDeck;
 }
@@ -334,15 +326,11 @@ void ISRfireTimer4()
   uint8_t playMidiDeck[2] = {0, 0};                        //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {
-    //boolean targetDeck = !thisDeck; //force point to other deck
-    // if ((crossfader - 1) >= instr)  //if instrument already crossed
-    //   targetDeck = thisDeck;        // point to this deck
-    //                                 //if not permanently muted and not momentary muted and it is a valid step
     boolean targetDeck;
     targetDeck = crossfadedDeck(instr);
-    if (!deck[targetDeck]->permanentMute[instr]                                                                              //
-        && !instrActionState[instr]                                                                                          //
-        && deck[targetDeck]->patterns->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount) //
+    if (!deck[targetDeck]->permanentMute[instr]                                                                             //
+        && !instrActionState[instr]                                                                                         //
+        && deck[targetDeck]->pattern->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount) //
     )
     {
       digitalWrite(triggerPins[instr], HIGH);
@@ -359,216 +347,6 @@ void ISRfireTimer4()
   if (stepCount >= MAXSTEPS)
     stepCount = 0;
   sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
-}
-
-void loop()
-{
-  //flags if any Oled update will be necessary in this cycle
-  boolean updateOled = false;
-
-  //read all processed encoders interruptions
-  queuedEncoder++;
-  if (queuedEncoder == MAXENCODERS)
-    queuedEncoder = 0;
-  readEncoder(queuedEncoder);
-
-  //check for all Oled updates ===============================================================
-  //if new mood was selected
-  if (updateOledBrowseMood)
-  {
-    checkDefaultOled();
-    oledShowBrowsedMood();
-    updateOledBrowseMood = false;
-    updateOled = true;
-  }
-  //update right upper corner with bpm value
-  else if (updateOledUpdateBpm)
-  {
-    updateOledUpdateBpm = false;
-    oledShowCornerInfo(2, bpm);
-    updateOled = true;
-  }
-  //update cross bar changes and there is available time to load new sample and play it
-  //this could be took off if using Tsunami
-  else if ((updateOledUpdateCross != 0) && sampleUpdateWindow())
-  {
-    checkDefaultOled();
-    oledShowCrossBar(crossfader);
-    updateOledUpdateCross = 0;
-    updateOled = true;
-  }
-  //copy selected mood to new deck
-  else if (updateOledSelectMood && sampleUpdateWindow())
-  {
-    checkDefaultOled();
-    oledShowPreviousMood();
-    oledShowSelectedMood();
-    previousMood = selectedMood;
-    oledShowCrossBar(-1);
-    crossfader = 0;
-    updateOledSelectMood = false;
-    updateOled = true;
-  }
-
-  //if only one intrument pattern changed
-  else if (updateOledInstrPattern != -1)
-  {
-    oledShowInstrumPattern(updateOledInstrPattern, deck[thisDeck]->deckPatterns[updateOledInstrPattern]->getValue(), RAM);
-    oledShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateOledInstrPattern]->getValue());
-    oledCustomMoodName();
-    updateOled = true;
-    updateOledInstrPattern = -1;
-  }
-  //if sampler changed and there is available time to update screen
-  else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
-  {
-    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
-    oledCustomMoodName();
-    oledShowCornerInfo(1, deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue());
-    updateOled = true;
-    updateOledChangePlayingSample = -1;
-  }
-
-  //if time shift changed
-  else if (updateOledUpdateTimeShift)
-  {
-    oledShowCornerInfo(3, (u_timeShift - 100) / 1000);
-    updateOled = true;
-    updateOledUpdateTimeShift = false;
-  }
-  //if gate lenght changed
-  else if (updateOledUpdategateLenght != -1)
-  {
-    oledShowCornerInfo(4, updateOledUpdategateLenght);
-    updateOled = true;
-    updateOledUpdategateLenght = -1;
-  }
-  //if erase pattern
-  else if (updateOledEraseInstrumentPattern != -1)
-  {
-    oledEraseInstrumentPattern(updateOledEraseInstrumentPattern); //clear pattern from display
-    updateOled = true;
-    updateOledEraseInstrumentPattern = -1;
-  }
-  //if step should be tapped
-  else if (updateOledTapInstrumentPattern != -1)
-  {
-    oledShowInstrumPattern(updateOledTapInstrumentPattern, deck[thisDeck]->deckPatterns[updateOledTapInstrumentPattern]->getValue(), RAM); //update Oled with new inserted step
-    updateOled = true;
-    updateOledTapInstrumentPattern = -1;
-  }
-  else if (updateOledRollbackInstrumentTap != -1)
-  {
-    oledShowInstrumPattern(updateOledRollbackInstrumentTap, deck[thisDeck]->deckPatterns[updateOledRollbackInstrumentTap]->getValue(), RAM); //update Oled with removed step
-    updateOled = true;
-    updateOledRollbackInstrumentTap = -1;
-  }
-
-  //if any Oled update
-  if (updateOled)
-    display.display();
-
-  //read interface inputs ===========================================================================================================
-  //read all encoders buttons (invert boolean state to make easy future comparation)
-  for (int8_t i = 0; i < MAXENCODERS; i++)
-    encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
-
-  //if new mood was selected....copy reference tables or create new mood in the cross area
-  if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
-  {
-    //before load new mood, prepare current deck to leave it the same way user customized
-    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-      //if there were some instrument not morphed in the current deck then mute it
-      if (crossfadedDeck(instr) == !thisDeck)
-        // if (instr >= crossfader)
-        deck[thisDeck]->permanentMute[instr] = true;
-
-    //change decks
-    thisDeck = !thisDeck;
-    deck[thisDeck]->cue(selectedMood,                     //
-                        moodKitPatterns[selectedMood][0], //
-                        moodKitPatterns[selectedMood][1], //
-                        moodKitPatterns[selectedMood][2], //
-                        moodKitPatterns[selectedMood][3], //
-                        moodKitPatterns[selectedMood][4], //
-                        moodKitPatterns[selectedMood][5]  //
-    );
-    // //send MIDI to pi to load sample
-    // for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-    //   playMidi(instrSampleMidiNote[i] + (10 * thisDeck), selectedMood, MIDICHANNEL);
-
-    updateOledSelectMood = true;
-    interfaceEvent.debounce(1000); //block any other interface event
-  }
-
-  //read all action buttons (invert boolean state to make easy future comparation)
-  for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
-  {
-    instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
-    //if any pattern should be erased
-    //cross encoder + instrument modifier + action button + not custom pattern
-    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      //erase pattern IF possible
-      deck[thisDeck]->patterns->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
-      interfaceEvent.debounce(1000);
-      updateOledEraseInstrumentPattern = i;
-    }
-    //if any tap should be rollbacked
-    //cross encoder + instrument modifier + action button + custom pattern
-    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2)    //
-             && instrActionState[i]                              //
-             && deck[thisDeck]->patterns->isThisCustomPattern(i) //
-             && interfaceEvent.debounced())
-    {
-      //if there was any rollback available
-      if (undoStack[0][i] != -1)
-      {
-        setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
-        setStepIntoplayingPattern(i, undoStack[0][i], 0);                                          //insert new step into Ram 1 pattern
-        rollbackStepIntoUndoArray(i);                                                              //rollback the last saved step
-        oledShowInstrumPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), RAM);               //update Oled with new inserted step
-        updateOled = true;
-        updateOledRollbackInstrumentTap = i;
-        interfaceEvent.debounce(200);
-      }
-    }
-    //if any pattern should be permanently muted
-    //cross encoder + action button
-    else if (onlyOneEncoderButtonIsPressed(CROSSENCODER) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
-      interfaceEvent.debounce(1000);
-    }
-    //if any pattern should be tapped
-    //one instrument modifier + action button
-    else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      int8_t updateOledTapStep;
-      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
-      {
-        //tap this step
-        updateOledTapStep = stepCount;
-        playMidi(1, powint(2, 5 - i), MIDICHANNEL); //send midinote to play only this instrument
-      }
-      else
-      {
-        //tap saved to next step
-        int8_t nextStep = stepCount;
-        nextStep++;
-        if (nextStep >= MAXSTEPS)
-          nextStep = 0;
-        updateOledTapStep = nextStep;
-        //no need to send midinote to play this instrument because it will be saved to next step cycle
-      }
-      deck[thisDeck]->patterns->customizeThisPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
-      setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep, 1); //insert new step into Rom pattern
-      setStepIntoplayingPattern(i, updateOledTapStep, 1);                                          //insert new step into Ram 1 pattern
-      setStepIntoUndoArray(i, updateOledTapStep);
-      updateOledTapInstrumentPattern = i;
-      interfaceEvent.debounce(u_tickInterval / 1000);
-    }
-  }
 }
 
 //allows to change samples only upo to after 2/3 of the tick interval
@@ -615,20 +393,18 @@ void readEncoder(uint8_t _queued)
     else
       encoderChange = -1;
 
-    switch (_queued)
+    if (_queued == MOODENCODER)
     {
-    case MOODENCODER:
       selectedMood += encoderChange;
       selectedMood = constrain(selectedMood, 0, MAXMOODS - 1);
-      //saves CPU if mood changed but still in the same position , in the start and in the end of the list
       if (lastSelectedMood != selectedMood)
       {
         updateOledBrowseMood = true;
         lastSelectedMood = selectedMood;
       }
-      break;
-
-    case CROSSENCODER:
+    }
+    else if (_queued == CROSSENCODER)
+    {
       //if cross button AND cross button are pressed and cross rotate change timer shift
       if (twoEncoderButtonsArePressed(ENCBUTMOOD, ENCBUTCROSS))
       {
@@ -649,8 +425,9 @@ void readEncoder(uint8_t _queued)
         crossfader = constrain(crossfader, 0, MAXINSTRUMENTS);
         updateOledUpdateCross = encoderChange;
       }
-      break;
-    default:
+    }
+    else
+    {
       //all other instrument encoders
       uint8_t _instrum = _queued - 2;
       //if only one ASSOCIATED modifier pressed
@@ -668,7 +445,7 @@ void readEncoder(uint8_t _queued)
         deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
         updateOledUpdategateLenght = _instrum;
       }
-      //if no modifier pressed , only change instrument pattern , schedule event
+      //nothing pressed, only pattern change , schedule event
       else if (noOneEncoderButtonIsPressed())
       {
         if (encoderChange == -1)
@@ -677,7 +454,6 @@ void readEncoder(uint8_t _queued)
           deck[thisDeck]->deckPatterns[_instrum]->advance();
         updateOledInstrPattern = _instrum; //flags to update this instrument on Display
       }
-      break;
     }
   }
 }
@@ -716,6 +492,7 @@ void oledShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pix
 
 void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper corner with the actual sample or pattern number
 {
+  String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
   display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
   display.setCursor(70, 0);
   display.setTextColor(WHITE);
@@ -761,31 +538,33 @@ void oledEraseBrowsedMoodName()
   display.fillRect(0, 3 * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
 }
 
+uint8_t lastBrowsedMood;
 void oledShowBrowsedMood() //update almost all bottom Oled area with the name of the selected mood and all 6 available instruments
 {
-  oledEraseBrowsedMoodName();
-  display.setTextColor(WHITE);
-  display.setCursor(0, 3 * TEXTLINE_HEIGHT);              //set cursor position
-  display.print(moodKitName[selectedMood]);               //print mood name
-  for (int8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
-    oledShowInstrumPattern(instr, moodKitPatterns[selectedMood][instr], ROM);
+  if (lastBrowsedMood != selectedMood)
+  {
+    lastBrowsedMood = selectedMood;
+    oledEraseBrowsedMoodName();
+    display.setTextColor(WHITE);
+    display.setCursor(0, 3 * TEXTLINE_HEIGHT);               //set cursor position
+    display.print(moodKitName[selectedMood]);                //print mood name
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
+      oledShowInstrPattern(instr, ROM);
+  }
 }
 
-void oledShowInstrumPattern(uint8_t _instr, uint8_t _pat, byte _src)
+void oledShowInstrPattern(uint8_t _instr, boolean _src)
 {
   oledEraseInstrumentPattern(_instr);
   display.setTextColor(WHITE);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
-    if (_src == ROM)                                   //refpatterns
-    {
-      if (browsePattern->getStep(_instr, _pat, step))
-        display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
-    }
-    else
-    {
-      if (deck[thisDeck]->patterns->getStep(_instr, _pat, step))
-        display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
-    }
+  {
+    //if browsed mood (ROM) or individual pattern browse (RAM)
+    if ((_src == ROM) && (pattern->getStep(_instr, moodKitPatterns[selectedMood][_instr], step)))
+      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
+    else if ((_src == RAM) && (deck[thisDeck]->pattern->getStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), step)))
+      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
+  }
 }
 
 //erase exatctly one line pattern
@@ -849,12 +628,12 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 //save tapped step into respective rom table
 void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
 {
-  deck[thisDeck]->patterns->setStep(_instr, _pattern, _step, _val);
+  deck[thisDeck]->pattern->setStep(_instr, _pattern, _step, _val);
 }
 
 void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
 {
-  deck[thisDeck]->patterns->setStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), _step, _val); //save tapped step
+  deck[thisDeck]->pattern->setStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), _step, _val); //save tapped step
 }
 
 void clearUndoArray(uint8_t _instr)
@@ -896,3 +675,213 @@ void controlChange(byte channel, byte control, byte value)
   MidiUSB.sendMIDI(event);
 }
 #endif
+
+void loop()
+{
+  //flags if any Oled update will be necessary in this cycle
+  boolean updateOled = false;
+
+  //read all processed encoders interruptions
+  queuedEncoder++;
+  if (queuedEncoder == MAXENCODERS)
+    queuedEncoder = 0;
+  readEncoder(queuedEncoder);
+
+  //check for all Oled updates ===============================================================
+  //mood browse
+  if (updateOledBrowseMood)
+  {
+    checkDefaultOled();
+    oledShowBrowsedMood();
+    updateOledBrowseMood = false;
+    updateOled = true;
+  }
+  //update right upper corner with bpm value
+  else if (updateOledUpdateBpm)
+  {
+    updateOledUpdateBpm = false;
+    oledShowCornerInfo(2, bpm);
+    updateOled = true;
+  }
+  //update cross bar changes and there is available time to load new sample and play it
+  //this could be took off if using Tsunami
+  else if ((updateOledUpdateCross != 0) && sampleUpdateWindow())
+  {
+    checkDefaultOled();
+    oledShowCrossBar(crossfader);
+    updateOledUpdateCross = 0;
+    updateOled = true;
+  }
+  //copy selected mood to new deck
+  else if (updateOledSelectMood && sampleUpdateWindow())
+  {
+    checkDefaultOled();
+    oledShowPreviousMood();
+    oledShowSelectedMood();
+    previousMood = selectedMood;
+    oledShowCrossBar(-1);
+    crossfader = 0;
+    updateOledSelectMood = false;
+    updateOled = true;
+  }
+
+  //if only one intrument pattern changed
+  else if (updateOledInstrPattern != -1)
+  {
+    oledShowInstrPattern(updateOledInstrPattern, RAM);
+    oledShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateOledInstrPattern]->getValue());
+    oledCustomMoodName();
+    updateOled = true;
+    updateOledInstrPattern = -1;
+  }
+  //if sampler changed and there is available time to update screen
+  else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
+  {
+    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
+    oledCustomMoodName();
+    oledShowCornerInfo(1, deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue());
+    updateOled = true;
+    updateOledChangePlayingSample = -1;
+  }
+
+  //if time shift changed
+  else if (updateOledUpdateTimeShift)
+  {
+    oledShowCornerInfo(3, (u_timeShift - 100) / 1000);
+    updateOled = true;
+    updateOledUpdateTimeShift = false;
+  }
+  //if gate lenght changed
+  else if (updateOledUpdategateLenght != -1)
+  {
+    oledShowCornerInfo(4, updateOledUpdategateLenght);
+    updateOled = true;
+    updateOledUpdategateLenght = -1;
+  }
+  //if erase pattern
+  else if (updateOledEraseInstrumentPattern != -1)
+  {
+    oledEraseInstrumentPattern(updateOledEraseInstrumentPattern); //clear pattern from display
+    updateOled = true;
+    updateOledEraseInstrumentPattern = -1;
+  }
+  //if step should be tapped
+  else if (updateOledTapInstrumentPattern != -1)
+  {
+    oledShowInstrPattern(updateOledTapInstrumentPattern, RAM); //update Oled with new inserted step
+    updateOled = true;
+    updateOledTapInstrumentPattern = -1;
+  }
+  else if (updateOledRollbackInstrumentTap != -1)
+  {
+    oledShowInstrPattern(updateOledRollbackInstrumentTap, RAM); //update Oled with removed step
+    updateOled = true;
+    updateOledRollbackInstrumentTap = -1;
+  }
+
+  //if any Oled update
+  if (updateOled)
+    display.display();
+
+  //read interface inputs ===========================================================================================================
+  //read all encoders buttons (invert boolean state to make easy future comparation)
+  for (int8_t i = 0; i < MAXENCODERS; i++)
+    encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
+
+  //if new mood was selected....copy reference tables or create new mood in the cross area
+  if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
+  {
+    //before load new mood, prepare current deck to leave it the same way user customized
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+      //if there were some instrument not morphed in the current deck then mute it
+      if (crossfadedDeck(instr) == !thisDeck)
+        // if (instr >= crossfader)
+        deck[thisDeck]->permanentMute[instr] = true;
+
+    //change decks
+    thisDeck = !thisDeck;
+    deck[thisDeck]->cue(selectedMood,                     //
+                        moodKitPatterns[selectedMood][0], //
+                        moodKitPatterns[selectedMood][1], //
+                        moodKitPatterns[selectedMood][2], //
+                        moodKitPatterns[selectedMood][3], //
+                        moodKitPatterns[selectedMood][4], //
+                        moodKitPatterns[selectedMood][5]  //
+    );
+    //send MIDI to pi to load sample
+    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
+      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), moodKitPatterns[selectedMood][i], MIDICHANNEL);
+
+    updateOledSelectMood = true;
+    interfaceEvent.debounce(1000); //block any other interface event
+  }
+
+  //read all action buttons (invert boolean state to make easy future comparation)
+  for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
+  {
+    instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
+    //if any pattern should be erased
+    //cross encoder + instrument modifier + action button + not custom pattern
+    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      //erase pattern IF possible
+      deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
+      interfaceEvent.debounce(1000);
+      updateOledEraseInstrumentPattern = i;
+    }
+    //if any tap should be rollbacked
+    //cross encoder + instrument modifier + action button + custom pattern
+    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2)   //
+             && instrActionState[i]                             //
+             && deck[thisDeck]->pattern->isThisCustomPattern(i) //
+             && interfaceEvent.debounced())
+    {
+      //if there was any rollback available
+      if (undoStack[0][i] != -1)
+      {
+        setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
+        setStepIntoplayingPattern(i, undoStack[0][i], 0);                                          //insert new step into Ram 1 pattern
+        rollbackStepIntoUndoArray(i);                                                              //rollback the last saved step
+        oledShowInstrPattern(i, RAM);                                                              //update Oled with new inserted step
+        updateOled = true;
+        updateOledRollbackInstrumentTap = i;
+        interfaceEvent.debounce(200);
+      }
+    }
+    //if any pattern should be permanently muted
+    //cross encoder + action button
+    else if (onlyOneEncoderButtonIsPressed(CROSSENCODER) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
+      interfaceEvent.debounce(1000);
+    }
+    //if any pattern should be tapped
+    //one instrument modifier + action button
+    else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      int8_t updateOledTapStep;
+      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
+      {
+        //tap this step
+        updateOledTapStep = stepCount;
+        playMidi(1, powint(2, 5 - i), MIDICHANNEL); //send midinote to play only this instrument
+      }
+      else
+      {
+        //tap saved to next step
+        int8_t nextStep = stepCount;
+        nextStep++;
+        if (nextStep >= MAXSTEPS)
+          nextStep = 0;
+        updateOledTapStep = nextStep;
+        //no need to send midinote to play this instrument because it will be saved to next step cycle
+      }
+      deck[thisDeck]->pattern->customizeThisPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
+      setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep, 1); //insert new step into Rom pattern
+      setStepIntoplayingPattern(i, updateOledTapStep, 1);                                          //insert new step into Ram 1 pattern
+      setStepIntoUndoArray(i, updateOledTapStep);
+      updateOledTapInstrumentPattern = i;
+      interfaceEvent.debounce(u_tickInterval / 1000);
+    }
+  }
+}

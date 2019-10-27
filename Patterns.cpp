@@ -13,7 +13,7 @@ Patterns::Patterns()
 //PUBLIC----------------------------------------------------------------------------------------------
 byte Patterns::isThisStepActive(uint8_t _instr, uint8_t _pat,  uint8_t _step)
 {
-  return refPatterns[_instr][_pat][_step];
+  return steps[_instr][_pat][_step];
 }
 
 uint8_t Patterns::isThisCustomPattern(uint8_t _instr)
@@ -27,7 +27,7 @@ void Patterns::eraseInstrumentPattern(uint8_t _instr, uint8_t _pat)
   customizeThisPattern(_instr, _pat);
   //clear actual pattern
   for (int8_t step = 0; step < MAXSTEPS; step++)
-    refPatterns[_instr][_pat][step] = 0;
+    steps[_instr][_pat][step] = 0;
 }
 
 void Patterns::customizeThisPattern(uint8_t _instr, uint8_t _pat)
@@ -43,11 +43,10 @@ void Patterns::customizeThisPattern(uint8_t _instr, uint8_t _pat)
   customizedPattern[_instr] = _pat;
 }
 
-//PRIVATE----------------------------------------------------------------------------------------------
 void Patterns::copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
 {
   for (uint8_t step = 0; step < MAXSTEPS; step++)
-    refPatterns[_instr][_target][step] = refPatterns[_instr][_source][step];
+    steps[_instr][_target][step] = steps[_instr][_source][step];
 }
 
 void Patterns::resetAllCustomizedPatternsToOriginal()
@@ -64,10 +63,12 @@ void Patterns::resetAllCustomizedPatternsToOriginal()
 
 byte Patterns::getStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
-  return refPatterns[_instr][_pat][_step];
+  return steps[_instr][_pat][_step];
 }
 
 void Patterns::setStep(uint8_t _instr, uint8_t _pat, uint8_t _step, byte _val)
 {
-  refPatterns[_instr][_pat][_step] = (_val == 1) ? 1 : 0;
+  steps[_instr][_pat][_step] = (_val == 1) ? 1 : 0;
 }
+
+//PRIVATE----------------------------------------------------------------------------------------------
