@@ -29,27 +29,31 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
-<li>10/26/2019
-  Very good news. They arrived all together: 
-  -The prototype version 0.2.;
-  -The panel version 0.1 - this is very important to evaluate measurements, colors, aesthetics and ergonomics.
-  -The tsunami wav trigger.
-  <li>This week I´ll work on new proto PCB. and next , the integration with Tsunami.
 
-<li>10/25/2019
-Maybe the new panel and PCB arrive today. 
-Huge code improvement while creating Deck classes to deal with load/modify instruments samples and patterns.
+<li>10/26/2019<br>
+  Very good news. They arrived all together: <br>
+  -The prototype version 0.2.;<br>
+  -The panel version 0.1 - this is very important to evaluate measurements, colors, aesthetics and ergonomics.<br>
+  -The tsunami wav trigger.<br>
+  <li>This week I´ll work on new proto PCB. and next , the integration with Tsunami.<br>
 
-<li>10/21/2019
-Last friday I´ve turned on the module to make some speed tests with fast instrument change. Unhapilly I experiented a very loud glitch coming from Pure Data when it load the new selected instrument. Basically it makes a sudden stop before load the new instrument into memory. After some poking and coding , the solution was to increase from 6 channels to 12 independent channels. Yes , 12 channels working simultaneously. This solution allows each instrument to be played at any time without interrupting another instrument that should be played to its end. Now works like a breeze.
-This issue led me to decide to test other hardware solution too. Swap from RaspberryPi + Pisound to Sparkfun WavTrigger. I already finished the order , now wait arrival.
-The new panel and PCB wasn´t shipped to me yet. So, I can´t record the new video this week as expected.
+<img alt="" style="border-width:0" src="P_20191027_210749_1.jpg" /></a><br>
+<img alt="" style="border-width:0" src="P_20191027_210958_1.jpg" /></a><br>
 
-10/12/2019:
+
+<li>10/25/2019<br>
+Maybe the new panel and PCB arrive today. <br>
+Huge code improvement while creating Deck classes to deal with load/modify instruments samples and patterns.<br>
+
+<li>10/21/2019<br>
+Last friday I´ve turned on the module to make some speed tests with fast instrument change. Unhapilly I experiented a very loud glitch coming from Pure Data when it load the new selected instrument. Basically it makes a sudden stop before load the new instrument into memory. After some poking and coding , the solution was to increase from 6 channels to 12 independent channels. Yes , 12 channels working simultaneously. This solution allows each instrument to be played at any time without interrupting another instrument that should be played to its end. Now works like a breeze.<br>
+This issue led me to decide to test other hardware solution too. Swap from RaspberryPi + Pisound to Sparkfun WavTrigger. I already finished the order , now wait arrival.<br>
+The new panel and PCB wasn´t shipped to me yet. So, I can´t record the new video this week as expected.<br>
+
+10/12/2019:<br>
 <li>new panel with function buttons to make tweaking easier, USB input and some graphic changes;
 <li>new schaematic and pcb;
 <li>new prototype pcb ordered;
-
 <img alt="" style="border-width:0" src="painel%200.980.jpg" /></a>
 
 10/08/2019:
