@@ -8,10 +8,13 @@
 
 Patterns::Patterns()
 {
+  for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+      undoStack[undos][instr] = -1;
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
-byte Patterns::isThisStepActive(uint8_t _instr, uint8_t _pat,  uint8_t _step)
+byte Patterns::isThisStepActive(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
   return steps[_instr][_pat][_step];
 }
@@ -32,15 +35,14 @@ void Patterns::eraseInstrumentPattern(uint8_t _instr, uint8_t _pat)
 
 void Patterns::customizeThisPattern(uint8_t _instr, uint8_t _pat)
 {
-  //if this pattern is already customized
-  if (customizedPattern[_instr] != 0)
-    //restore it to original state before make any other customization
-    copyRefPatternToRefPattern(_instr, BKPPATTERN, customizedPattern[_instr]);
-  //now it´s ok to make new custom pattern
-  //bkp it to safe area
-  copyRefPatternToRefPattern(_instr, _pat, BKPPATTERN);
-  //set asked pattern as BKPd
-  customizedPattern[_instr] = _pat;
+  //if this pattern isn´t customized
+  if (customizedPattern[_instr] == 0)
+  {
+    copyRefPatternToRefPattern(_instr, _pat, BKPPATTERN); //bkp it to safe area
+    customizedPattern[_instr] = _pat;                     //set asked pattern as BKPd
+  }
+  //restore it to original state before make any other customization
+  // copyRefPatternToRefPattern(_instr, BKPPATTERN, customizedPattern[_instr]);
 }
 
 void Patterns::copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
@@ -71,4 +73,38 @@ void Patterns::setStep(uint8_t _instr, uint8_t _pat, uint8_t _step, byte _val)
   steps[_instr][_pat][_step] = (_val == 1) ? 1 : 0;
 }
 
+void Patterns::clearUndoArray(uint8_t _instr)
+{
+  for (uint8_t i = 0; i < MAXUNDOS; i++)
+    undoStack[i][_instr] = -1;
+}
+
+void Patterns::addUndoStep(uint8_t _instr, uint8_t _step)
+{
+  for (uint8_t i = (MAXUNDOS - 1); i > 0; i--)
+    undoStack[i][_instr] = undoStack[i - 1][_instr]; //move all values ahead to open space on stack
+  undoStack[0][_instr] = _step;
+}
+
+void Patterns::rollbackUndoStep(uint8_t _instr, uint8_t _pat)
+{
+  setStep(_instr, _pat, undoStack[0][_instr], 0); //remove tapped step
+  for (uint8_t i = 0; i < (MAXUNDOS - 1); i++)
+    undoStack[i][_instr] = undoStack[i + 1][_instr]; //move all values ahead to open space on stack
+  undoStack[(MAXUNDOS - 1)][_instr] = -1;
+}
+
+//if there is any rollback available
+byte Patterns::undoAvailable(uint8_t _instr)
+{
+  return (undoStack[0][_instr] != -1);
+}
+
+//tap a step 
+void Patterns::tapStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
+{
+  pattern->customizeThisPattern(_instr, _pat); //prepare the new pattern
+  pattern->setStep(_instr, _pat, _step, 1);    //insert new step into patterns
+  pattern->addUndoStep(_instr, _step);         //insert new step into undo stack
+}
 //PRIVATE----------------------------------------------------------------------------------------------

@@ -188,9 +188,6 @@ uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
 #define ROM 1
 int8_t crossfader = 0;
 
-#define MAXUNDOS MAXSTEPS
-int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
-
 void ISRfireTimer3();
 void ISRfireTimer4();
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
@@ -212,11 +209,6 @@ void endTriggers();
 // boolean noOneEncoderButtonIsPressed();
 // boolean onlyOneEncoderButtonIsPressed(uint8_t _target);
 // boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
-// void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val);
-// void clearUndoArray(uint8_t _instr);
-// void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val);
-// void setStepIntoUndoArray(uint8_t _instr, uint8_t _step, uint8_t _val);
-// void rollbackStepIntoUndoArray(uint8_t _instr);
 
 void setup()
 {
@@ -264,10 +256,6 @@ void setup()
     digitalWrite(triggerPins[i], LOW);
     delay(300);
   }
-
-  for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
-    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-      undoStack[undos][instr] = -1;
 
   //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
@@ -560,9 +548,8 @@ void oledShowInstrPattern(uint8_t _instr, boolean _src)
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
-    if ((_src == ROM) && (pattern->getStep(_instr, moodKitPatterns[selectedMood][_instr], step)))
-      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
-    else if ((_src == RAM) && (deck[thisDeck]->pattern->getStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), step)))
+    if (((_src == ROM) && (pattern->getStep(_instr, moodKitPatterns[selectedMood][_instr], step))) ||
+        ((_src == RAM) && (deck[thisDeck]->pattern->getStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), step))))
       display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }
@@ -623,37 +610,6 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
     return false;
   //if all tests where OK
   return true;
-}
-
-//save tapped step into respective rom table
-void setStepIntoRefPattern(uint8_t _instr, uint8_t _pattern, uint8_t _step, uint8_t _val)
-{
-  deck[thisDeck]->pattern->setStep(_instr, _pattern, _step, _val);
-}
-
-void setStepIntoplayingPattern(uint8_t _instr, uint8_t _step, uint8_t _val)
-{
-  deck[thisDeck]->pattern->setStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), _step, _val); //save tapped step
-}
-
-void clearUndoArray(uint8_t _instr)
-{
-  for (uint8_t i = 0; i < MAXUNDOS; i++)
-    undoStack[i][_instr] = -1;
-}
-
-void setStepIntoUndoArray(uint8_t _instr, uint8_t _step)
-{
-  for (uint8_t i = (MAXUNDOS - 1); i > 0; i--)
-    undoStack[i][_instr] = undoStack[i - 1][_instr]; //move all values ahead to open space on stack
-  undoStack[0][_instr] = _step;
-}
-
-void rollbackStepIntoUndoArray(uint8_t _instr)
-{
-  for (uint8_t i = 0; i < (MAXUNDOS - 1); i++)
-    undoStack[i][_instr] = undoStack[i + 1][_instr]; //move all values ahead to open space on stack
-  undoStack[(MAXUNDOS - 1)][_instr] = -1;
 }
 
 #ifdef DO_MIDIUSB
@@ -837,11 +793,9 @@ void loop()
              && interfaceEvent.debounced())
     {
       //if there was any rollback available
-      if (undoStack[0][i] != -1)
+      if (deck[thisDeck]->pattern->undoAvailable(i))
       {
-        setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), undoStack[0][i], 0); //insert new step into Rom pattern
-        setStepIntoplayingPattern(i, undoStack[0][i], 0);                                          //insert new step into Ram 1 pattern
-        rollbackStepIntoUndoArray(i);                                                              //rollback the last saved step
+        deck[thisDeck]->pattern->rollbackUndoStep(i, deck[thisDeck]->deckPatterns[i]->getValue()); //rollback the last saved undo
         oledShowInstrPattern(i, RAM);                                                              //update Oled with new inserted step
         updateOled = true;
         updateOledRollbackInstrumentTap = i;
@@ -859,6 +813,7 @@ void loop()
     //one instrument modifier + action button
     else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
     {
+      //calculate if the tap will be saved on this step or into next
       int8_t updateOledTapStep;
       if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
       {
@@ -876,10 +831,7 @@ void loop()
         updateOledTapStep = nextStep;
         //no need to send midinote to play this instrument because it will be saved to next step cycle
       }
-      deck[thisDeck]->pattern->customizeThisPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
-      setStepIntoRefPattern(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep, 1); //insert new step into Rom pattern
-      setStepIntoplayingPattern(i, updateOledTapStep, 1);                                          //insert new step into Ram 1 pattern
-      setStepIntoUndoArray(i, updateOledTapStep);
+      deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep);
       updateOledTapInstrumentPattern = i;
       interfaceEvent.debounce(u_tickInterval / 1000);
     }

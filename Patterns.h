@@ -17,6 +17,7 @@
 #define MAXINSTR6PATTERNS 2
 #define BKPPATTERN 0
 #define MAXGATELENGHTS 8
+#define MAXUNDOS MAXSTEPS
 
 #include "Arduino.h"
 #include "Counter.h"
@@ -35,8 +36,15 @@ public:
   void setStep(uint8_t _instr, uint8_t _pat, uint8_t _step, byte _val);
   void resetAllCustomizedPatternsToOriginal();
   void copystepTostep(uint8_t _instr, uint8_t _source, uint8_t _target);
+  void clearUndoArray(uint8_t _instr);
+  void rollbackUndoStep(uint8_t _instr,uint8_t _pat);
+  void addUndoStep(uint8_t _instr, uint8_t _step);
+  byte undoAvailable(uint8_t _instr);
+  void tapStep(uint8_t _instr, uint8_t _pat, uint8_t _step);
 
 private:
+  int8_t undoStack[MAXUNDOS][MAXINSTRUMENTS];
+
   //position [0] reserved to BKP pattern , position [1] reserved to "MUTE" pattern
   byte step0[MAXINSTR1PATTERNS + 1][MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
