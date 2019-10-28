@@ -776,21 +776,13 @@ void loop()
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
-    //if any pattern should be erased
-    //cross encoder + instrument modifier + action button + not custom pattern
-    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      //erase pattern IF possible
-      deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
-      interfaceEvent.debounce(1000);
-      updateOledEraseInstrumentPattern = i;
-    }
+
     //if any tap should be rollbacked
     //cross encoder + instrument modifier + action button + custom pattern
-    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2)   //
-             && instrActionState[i]                             //
-             && deck[thisDeck]->pattern->isThisCustomPattern(i) //
-             && interfaceEvent.debounced())
+    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2)   //
+        && instrActionState[i]                             //
+        && deck[thisDeck]->pattern->isThisCustomPattern(i) //
+        && interfaceEvent.debounced())
     {
       //if there was any rollback available
       if (deck[thisDeck]->pattern->undoAvailable(i))
@@ -801,6 +793,15 @@ void loop()
         updateOledRollbackInstrumentTap = i;
         interfaceEvent.debounce(200);
       }
+    }
+    //if any pattern should be erased
+    //cross encoder + instrument modifier + action button + not custom pattern
+    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      //erase pattern IF possible
+      deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
+      interfaceEvent.debounce(1000);
+      updateOledEraseInstrumentPattern = i;
     }
     //if any pattern should be permanently muted
     //cross encoder + action button

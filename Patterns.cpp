@@ -103,8 +103,9 @@ byte Patterns::undoAvailable(uint8_t _instr)
 //tap a step 
 void Patterns::tapStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
-  pattern->customizeThisPattern(_instr, _pat); //prepare the new pattern
-  pattern->setStep(_instr, _pat, _step, 1);    //insert new step into patterns
-  pattern->addUndoStep(_instr, _step);         //insert new step into undo stack
+  customizeThisPattern(_instr, _pat); //prepare the new pattern
+  setStep(_instr, _pat, _step, 1);    //insert new step into patterns
+  addUndoStep(_instr, _step);         //insert new step into undo stack
 }
+
 //PRIVATE----------------------------------------------------------------------------------------------
