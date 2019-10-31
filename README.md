@@ -2,16 +2,14 @@
 Task manager:
                                              PCB         CODE    PANEL
 relative clock (midi delay compensation)      -           O         -
-pattern reset clock in                        X           X         X
-pattern init clock out                        O           O         x
+pattern reset clock in                        o           X         o
+pattern init clock out                        O           O         o
 external usb cable for RPi                    X           x         x
-2 fast press encoder button                   -           x         -
-CV sequencer                                  x           O         x
-algorithm melisma                             -           o         x
-algorithm stepped cv                          -           o         x
-change hardware pins                          x           o         -
-clock select                                  x           x         x
-variable trigger lenght                       o           o         x
+CV sequencer                                  o           O         o
+algorithm stepped cv                          -           o         o
+change hardware pins                          o           o         -
+clock select                                  o           x         o
+variable trigger lenght                       o           o         -
 
 - not applicable
 x scheduled
@@ -29,6 +27,10 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
+<li>10/31/2019<br>
+  The new proto is build and running<br>
+  The cv sequencer was coded and it creates very nice melodies<br>
+  The second WaveTrigger arrived.It will be tested this week<br>
 
 <li>10/26/2019<br>
   Very good news. They arrived all together: <br>
