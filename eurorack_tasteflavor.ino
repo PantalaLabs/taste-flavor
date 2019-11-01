@@ -22,10 +22,30 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 #include <EventDebounce.h>
 #include <Rotary.h>
 #include <DueTimer.h>
+#include <AnalogInput.h>
 #include "Deck.h"
+#include "Patterns.h"
+#include "Melody.h"
 
 Deck *deck[2];
 Patterns *pattern;
+Melody *melody;
+
+uint8_t commandOption;
+#define COMMANDSAMPLE 1
+#define COMMANDBPM 2
+#define COMMANDTIMESHIFT 3
+#define COMMANDTAP 4
+#define COMMANDUNDO 5
+#define COMMANDSILENCE 6
+#define COMMANDERASE 7
+#define COMMANDTRIGGERLENGHT 8
+
+#define MAXMELODYPARMS 6
+
+AnalogInput menuCommand(A6);
+#define MAXPARAMETERS 8 //max step sequence
+int menuAdcSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715, 1023};
 
 #define I2C_ADDRESS 0x3C
 #define DISPLAY_WIDTH 128 // OLED Oled width, in pixels
@@ -53,53 +73,66 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define MOODMIDINOTE 20  //midi note to mood message
 #define CROSSMIDINOTE 21 //midi note to cross message
 
-#define KICKCHANNEL 0
-#define SNAKERCHANNEL 1 //snare + shaker
-#define CLAPCHANNEL 2
-#define HATCHANNEL 3
-#define OHHRIDECHANNEL 4 //open hi hat + ride
-#define PERCCHANNEL 5
+uint8_t queuedMelodyParameter;
+Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 
 //PINS
+#define TRIGGERINPIN 51
+#define RESETINPIN 53
+#define RXPIN 17
+#define TXPIN 18
+
 #define SDAPIN 20
 #define SCLPIN 21
-#define MIDITXPIN 18
+
+#define ENCPINAMOOD 13
+#define ENCPINBMOOD 12
 #define ENCBUTPINMOOD 11
+
+#define ENCPINACROSS 10
+#define ENCPINBCROSS 9
 #define ENCBUTPINCROSS 8
+
+#define ENCPINAINSTR1 38
+#define ENCPINBINSTR1 36
 #define ENCBUTPININSTR1 40
+
+#define ENCPINAINSTR2 32
+#define ENCPINBINSTR2 30
 #define ENCBUTPININSTR2 34
+
+#define ENCPINAINSTR3 44
+#define ENCPINBINSTR3 42
 #define ENCBUTPININSTR3 46
+
+#define ENCPINAINSTR4 14
+#define ENCPINBINSTR4 15
 #define ENCBUTPININSTR4 22
+
 #define ENCBUTPININSTR5 52
+#define ENCPINAINSTR5 50
+#define ENCPINBINSTR5 48
+
 #define ENCBUTPININSTR6 28
+#define ENCPINAINSTR6 26
+#define ENCPINBINSTR6 24
+
+#define TRIGOUTPATTERNPIN1 7
+
 #define TRIGOUTPIN1 5
 #define TRIGOUTPIN2 3
 #define TRIGOUTPIN3 16
 #define TRIGOUTPIN4 29
 #define TRIGOUTPIN5 23
 #define TRIGOUTPIN6 27
-#define ENCPINAMOOD 13
-#define ENCPINBMOOD 12
-#define ENCPINACROSS 10
-#define ENCPINBCROSS 9
-#define ENCPINAINSTR1 38
-#define ENCPINBINSTR1 36
-#define ENCPINAINSTR2 32
-#define ENCPINBINSTR2 30
-#define ENCPINAINSTR3 44
-#define ENCPINBINSTR3 42
-#define ENCPINAINSTR4 14
-#define ENCPINBINSTR4 15
-#define ENCPINAINSTR5 50
-#define ENCPINBINSTR5 48
-#define ENCPINAINSTR6 26
-#define ENCPINBINSTR6 24
+
 #define ACTIONPININSTR1 6
 #define ACTIONPININSTR2 4
 #define ACTIONPININSTR3 2
 #define ACTIONPININSTR4 17
 #define ACTIONPININSTR5 31
 #define ACTIONPININSTR6 25
+
 #define ENCBUTMOOD 0
 #define ENCBUTCROSS 1
 #define ENCBUTINSTR1 2
@@ -108,6 +141,9 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #define ENCBUTINSTR4 5
 #define ENCBUTINSTR5 6
 #define ENCBUTINSTR6 7
+
+EventDebounce info(30);
+byte infoState;
 
 //time related and bpm
 volatile uint32_t u_lastTick;               //last time tick was called
@@ -119,6 +155,7 @@ int32_t u_timeShiftStep = 1000;             //time shift amount update step
 volatile uint32_t sampleChangeWindowEndTime;
 uint16_t bpm = 125;
 uint32_t u_bpm = 0;
+uint8_t powArray[7] = {1, 2, 4, 8, 16, 32, 64};
 
 //MIDI
 uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
@@ -134,6 +171,7 @@ volatile int8_t gateLenghtCounter = 0;
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
 
 //encoders buttons : mood, cross, instruments
+uint8_t queuedParameter = 0; //???????????????????????????????????
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
 boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t instrActionPins[MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
@@ -141,6 +179,7 @@ boolean instrActionState[MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 uint8_t sampleButtonModifier[MAXENCODERS] = {0, 0, ENCBUTINSTR2, ENCBUTINSTR1, ENCBUTINSTR4, ENCBUTINSTR3, ENCBUTINSTR6, ENCBUTINSTR5}; //this points to each instrument sample change button modifier
 
 EventDebounce interfaceEvent(200); //min time in ms to accept another interface event
+EventDebounce melodieUpdate(70);   //min time in ms read new melody parameter
 
 Rotary MOODencoder(ENCPINAMOOD, ENCPINBMOOD);
 Rotary CROSSencoder(ENCPINACROSS, ENCPINBCROSS);
@@ -175,12 +214,12 @@ int8_t queuedEncoder = 0;
 
 //mood
 #define MAXMOODS 4 //max moods
-String moodKitName[MAXMOODS] = {"", "P.Labs-Choke", "P.Labs-Empty Room", "P.Labs-April23"};
+String moodKitName[MAXMOODS] = {"", "P.Labs-Empty Room", "P.Labs-Choke", "P.Labs-April23"};
 uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
-    {2, 3, 4, 2, 4, 1}, //P.Labs-Choke
-    {2, 2, 2, 2, 2, 1}, //P.Labs-Empty Room
-    {2, 3, 3, 3, 3, 1}  //P.Labs-April23
+    {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
+    {2, 3, 3, 3, 3, 1}, //P.Labs-Choke
+    {2, 3, 4, 2, 3, 1}  //P.Labs-April23
 };
 
 //decks
@@ -204,14 +243,13 @@ void oledCustomMoodName();
 void oledShowSelectedMood();
 void endTriggers();
 
-// boolean crossfadedDeck(uint8_t _instr);
-// boolean sampleUpdateWindow();
-// boolean noOneEncoderButtonIsPressed();
-// boolean onlyOneEncoderButtonIsPressed(uint8_t _target);
-// boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2);
-
 void setup()
 {
+  analogWriteResolution(12);
+  analogReadResolution(10);
+  pinMode(DAC0, OUTPUT);
+  menuCommand.setMenu(menuAdcSeparators, MAXPARAMETERS + 1);
+
 #ifdef DO_MIDIHW
   MIDI.begin();
 #endif
@@ -224,6 +262,10 @@ void setup()
   deck[0] = new Deck();
   deck[1] = new Deck();
   pattern = new Patterns();
+  melody = new Melody(64);
+
+  for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
+    paramFilter[i] = new Filter();
 
   //pinMode(TRIGGERINPIN, INPUT);
   //triggerIn.attachCallOnRising(ISRfireTimer3);
@@ -246,16 +288,32 @@ void setup()
     pinMode(triggerPins[i], OUTPUT);
     digitalWrite(triggerPins[i], LOW);
   }
+
+  //start pattern trigger out
+  pinMode(TRIGOUTPATTERNPIN1, OUTPUT);
+  digitalWrite(TRIGOUTPATTERNPIN1, HIGH);
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     digitalWrite(triggerPins[i], HIGH);
-    delay(300);
+    analogWrite(DAC0, i * 512);
+    delay(250);
   }
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     digitalWrite(triggerPins[i], LOW);
-    delay(300);
+    analogWrite(DAC0, (MAXINSTRUMENTS - i) * 512);
+    delay(250);
   }
+  analogWrite(DAC0, 0);
+  digitalWrite(TRIGOUTPATTERNPIN1, LOW);
+  //DAC 0-5v test
+  // while (1)
+  // {
+  //   analogWrite(DAC0, 4095);
+  //   delay(5000);
+  //   analogWrite(DAC0, 0);
+  //   delay(5000);
+  // }
 
   //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
@@ -311,7 +369,7 @@ void ISRfireTimer4()
   noInterrupts();
   Timer5.start(DEFAULTGATELENGHT);                         //start 5ms first trigger timer
   Timer4.stop();                                           //stop timer shift
-  uint8_t playMidiDeck[2] = {0, 0};                        //calculate final noteVelocity
+  uint8_t finalNote[2] = {0, 0};                           //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {
     boolean targetDeck;
@@ -322,18 +380,22 @@ void ISRfireTimer4()
     )
     {
       digitalWrite(triggerPins[instr], HIGH);
-      playMidiDeck[targetDeck] = playMidiDeck[targetDeck] + powint(2, 5 - instr); //acumulate to play this or previous instrument
+      finalNote[targetDeck] = finalNote[targetDeck] + powArray[5 - instr]; //acumulate to play this or previous instrument
     }
   }
-  if (playMidiDeck[thisDeck] != 0)
-    playMidi(thisDeck + 1, playMidiDeck[thisDeck], MIDICHANNEL); //send midinote to this deck with binary coded trigger message
-  if (playMidiDeck[!thisDeck] != 0)
-    playMidi(!thisDeck + 1, playMidiDeck[!thisDeck], MIDICHANNEL); //send midinote to other deck with binary coded trigger message
+  if (finalNote[thisDeck] != 0)
+    playMidi(thisDeck + 1, finalNote[thisDeck], MIDICHANNEL); //send midinote to this deck with binary coded trigger message
+  if (finalNote[!thisDeck] != 0)
+    playMidi(!thisDeck + 1, finalNote[!thisDeck], MIDICHANNEL); //send midinote to other deck with binary coded trigger message
   interrupts();
+  analogWrite(DAC0, melody->getNote());
   gateLenghtCounter = 0;
   stepCount++;
   if (stepCount >= MAXSTEPS)
+  {
     stepCount = 0;
+    melody->resetStepCounter();
+  }
   sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
 }
 
@@ -394,14 +456,14 @@ void readEncoder(uint8_t _queued)
     else if (_queued == CROSSENCODER)
     {
       //if cross button AND cross button are pressed and cross rotate change timer shift
-      if (twoEncoderButtonsArePressed(ENCBUTMOOD, ENCBUTCROSS))
+      if (commandOption == COMMANDTIMESHIFT)
       {
         u_timeShift += encoderChange * u_timeShiftStep;
         u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
         updateOledUpdateTimeShift = true;
       }
       //if cross button is pressed and cross rotate CHANGE BPM
-      else if (onlyOneEncoderButtonIsPressed(ENCBUTCROSS))
+      else if (commandOption == COMMANDBPM)
       {
         updateOledUpdateBpm = true;
         bpm += encoderChange;
@@ -419,7 +481,7 @@ void readEncoder(uint8_t _queued)
       //all other instrument encoders
       uint8_t _instrum = _queued - 2;
       //if only one ASSOCIATED modifier pressed
-      if (onlyOneEncoderButtonIsPressed(sampleButtonModifier[_queued]))
+      if (commandOption == COMMANDSAMPLE)
       {
         if (encoderChange == -1)
           deck[thisDeck]->deckSamples[_instrum]->reward();
@@ -428,7 +490,7 @@ void readEncoder(uint8_t _queued)
         updateOledChangePlayingSample = _instrum;
       }
       //if only SAME button pressed , change gate lenght
-      else if (onlyOneEncoderButtonIsPressed(_queued))
+      else if (commandOption == COMMANDTRIGGERLENGHT)
       {
         deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
         updateOledUpdategateLenght = _instrum;
@@ -632,6 +694,15 @@ void controlChange(byte channel, byte control, byte value)
 }
 #endif
 
+void readActionMenu()
+{
+  queuedParameter++;
+  if (queuedParameter == MAXPARAMETERS)
+    queuedParameter = 0;
+  menuCommand.readSmoothed();
+  commandOption = menuCommand.getSmoothedMenuIndex() + 1;
+}
+
 void loop()
 {
   //flags if any Oled update will be necessary in this cycle
@@ -749,25 +820,21 @@ void loop()
   {
     //before load new mood, prepare current deck to leave it the same way user customized
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-      //if there were some instrument not morphed in the current deck then mute it
-      if (crossfadedDeck(instr) == !thisDeck)
-        // if (instr >= crossfader)
+      if (crossfadedDeck(instr) == !thisDeck) //if there were some instrument not morphed in the current deck then mute it
         deck[thisDeck]->permanentMute[instr] = true;
-
     //change decks
     thisDeck = !thisDeck;
-    deck[thisDeck]->cue(selectedMood,                     //
-                        moodKitPatterns[selectedMood][0], //
+    deck[thisDeck]->cue(selectedMood - 1,                 //sample index
+                        moodKitPatterns[selectedMood][0], //patterns
                         moodKitPatterns[selectedMood][1], //
                         moodKitPatterns[selectedMood][2], //
                         moodKitPatterns[selectedMood][3], //
                         moodKitPatterns[selectedMood][4], //
                         moodKitPatterns[selectedMood][5]  //
     );
-    //send MIDI to pi to load sample
+    //send MIDI to pi to load samples
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), moodKitPatterns[selectedMood][i], MIDICHANNEL);
-
+      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), selectedMood - 1, MIDICHANNEL);
     updateOledSelectMood = true;
     interfaceEvent.debounce(1000); //block any other interface event
   }
@@ -776,10 +843,9 @@ void loop()
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
-
     //if any tap should be rollbacked
     //cross encoder + instrument modifier + action button + custom pattern
-    if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2)   //
+    if ((commandOption == COMMANDUNDO)                     //
         && instrActionState[i]                             //
         && deck[thisDeck]->pattern->isThisCustomPattern(i) //
         && interfaceEvent.debounced())
@@ -794,9 +860,10 @@ void loop()
         interfaceEvent.debounce(200);
       }
     }
-    //if any pattern should be erased
+
     //cross encoder + instrument modifier + action button + not custom pattern
-    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    //    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((commandOption == COMMANDERASE) && instrActionState[i] && interfaceEvent.debounced())
     {
       //erase pattern IF possible
       deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
@@ -805,14 +872,14 @@ void loop()
     }
     //if any pattern should be permanently muted
     //cross encoder + action button
-    else if (onlyOneEncoderButtonIsPressed(CROSSENCODER) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((commandOption == COMMANDSILENCE) && instrActionState[i] && interfaceEvent.debounced())
     {
       deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
       interfaceEvent.debounce(1000);
     }
     //if any pattern should be tapped
     //one instrument modifier + action button
-    else if (onlyOneEncoderButtonIsPressed(i + 2) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((commandOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
     {
       //calculate if the tap will be saved on this step or into next
       int8_t updateOledTapStep;
@@ -820,7 +887,9 @@ void loop()
       {
         //tap this step
         updateOledTapStep = stepCount;
-        playMidi(1, powint(2, 5 - i), MIDICHANNEL); //send midinote to play only this instrument
+        if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep))
+          //send midinote to play only this instrument if it was not already played
+          playMidi(1, powint(2, 5 - i), MIDICHANNEL);
       }
       else
       {
@@ -836,5 +905,32 @@ void loop()
       updateOledTapInstrumentPattern = i;
       interfaceEvent.debounce(u_tickInterval / 1000);
     }
+  }
+  //read action ladder menu
+  readActionMenu();
+
+  //if it is time to read one new melody parameter
+  if (melodieUpdate.debounced())
+  {
+    melodieUpdate.debounce();
+    int16_t read;
+    //8bit resolution parameters
+    read = paramFilter[queuedMelodyParameter]->add(analogRead(queuedMelodyParameter) >> 4);
+    boolean newUpdates;
+    newUpdates = melody->updateParameters(queuedMelodyParameter, read);
+    if (newUpdates)
+    {
+      digitalWrite(TRIGOUTPATTERNPIN1, HIGH);
+      info.debounce();
+      infoState = true;
+    }
+    queuedMelodyParameter++;
+    if (queuedMelodyParameter >= MAXMELODYPARMS)
+      queuedMelodyParameter = 0;
+  }
+  if (infoState && info.debounced())
+  {
+    infoState = false;
+    digitalWrite(TRIGOUTPATTERNPIN1, LOW);
   }
 }
