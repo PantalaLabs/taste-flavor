@@ -12,7 +12,6 @@ Melody::Melody(uint8_t maxsteps)
 {
   _maxsteps = maxsteps;
   stepCounter = 0;
-  //loopCounter = 0;
   randomSeed(micros());
   computeNewMelody();
   calculateAccents();
@@ -21,30 +20,23 @@ Melody::Melody(uint8_t maxsteps)
 //PUBLIC----------------------------------------------------------------------------------------------
 uint16_t Melody::getNote()
 {
-
+  //_lastPlayedNote = applyFilter(finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + accent[stepCounter]);
   _lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
   _lastPlayedNote = constrain(_lastPlayedNote, 0, 60);
 
-  // loopCounter++;
-  // if (loopCounter >= loopArray[parameters[PARAMSIZ][2]])
-  //   loopCounter = 0;
-
   stepCounter++;
   if (stepCounter >= _maxsteps)
-  {
     stepCounter = 0;
-    // loopCounter = 0;
-  }
+
   return mapMidi2Volt(_lastPlayedNote, 0);
 }
 
 void Melody::resetStepCounter()
 {
   stepCounter = 0;
-  // loopCounter = 0;
 }
 
-boolean Melody::updateParameters(uint8_t _param, uint8_t _val)
+boolean Melody::updateParameters(uint8_t _param, uint16_t _val)
 {
   uint16_t read;
 
@@ -52,7 +44,7 @@ boolean Melody::updateParameters(uint8_t _param, uint8_t _val)
   read = map(_val, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
   if (parameters[_param][2] != read)
   {
-    // if (_param == PARAMSPR)
+    // if (_param == PARAMSIZ)
     //   Serial.println(read);
     parameters[_param][2] = read;
     if (_param == PARAMACC)

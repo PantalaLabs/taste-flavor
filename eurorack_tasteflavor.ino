@@ -5,17 +5,12 @@ Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
-#define DO_SERIAL true
-#define DO_MIDIUSB false
+#define DO_SERIAL false
 #define DO_MIDIHW true
 
 #ifdef DO_MIDIHW
 #include <MIDI.h>
 MIDI_CREATE_DEFAULT_INSTANCE();
-#endif
-
-#ifdef DO_MIDIUSB
-#include "MIDIUSB.h"
 #endif
 
 #include <PantalaDefines.h>
@@ -143,7 +138,7 @@ Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 #define ENCBUTINSTR6 7
 
 EventDebounce info(30);
-byte infoState;
+uint8_t infoState;
 
 //time related and bpm
 volatile uint32_t u_lastTick;               //last time tick was called
@@ -155,7 +150,7 @@ int32_t u_timeShiftStep = 1000;             //time shift amount update step
 volatile uint32_t sampleChangeWindowEndTime;
 uint16_t bpm = 125;
 uint32_t u_bpm = 0;
-uint8_t powArray[7] = {1, 2, 4, 8, 16, 32, 64};
+uint8_t powArray[6] = {1, 2, 4, 8, 16, 32};
 
 //MIDI
 uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
@@ -207,7 +202,9 @@ int8_t updateOledTapInstrumentPattern = -1;
 int8_t updateOledRollbackInstrumentTap = -1;
 boolean updateOledModifierPressed = false;
 boolean defaultOledNotActiveYet = true;
+boolean externalClockSource = 0; //0=internal , 1=external
 
+EventDebounce switchBackToInternalClock(3000);
 //sequencer
 volatile int8_t stepCount = 0;
 int8_t queuedEncoder = 0;
@@ -227,8 +224,8 @@ uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
 #define ROM 1
 int8_t crossfader = 0;
 
-void ISRfireTimer3();
-void ISRfireTimer4();
+void ISRfireTimer3(); //base clock
+void ISRfireTimer4(); //shifted clock
 void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
 void readEncoder();
 void checkDefaultOled();
@@ -267,8 +264,8 @@ void setup()
   for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
     paramFilter[i] = new Filter();
 
-  //pinMode(TRIGGERINPIN, INPUT);
-  //triggerIn.attachCallOnRising(ISRfireTimer3);
+  // pinMode(TRIGGERINPIN, INPUT);
+  // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToInternal, RISING);
 
   //start all encoders
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -344,6 +341,15 @@ void setup()
   Timer5.attachInterrupt(endTriggers);
 }
 
+// void ISRswitchToInternal()
+// {
+//   externalClockSource = true;
+//   switchBackToInternalClock.debounce();
+//   Timer3.detachInterrupt();
+//   Timer3.stop();
+//   ISRfireTimer3();
+// }
+
 //base clock
 void ISRfireTimer3()
 {
@@ -380,7 +386,7 @@ void ISRfireTimer4()
     )
     {
       digitalWrite(triggerPins[instr], HIGH);
-      finalNote[targetDeck] = finalNote[targetDeck] + powArray[5 - instr]; //acumulate to play this or previous instrument
+      finalNote[targetDeck] = finalNote[targetDeck] + powArray[instr]; //acumulate to play this or previous instrument
     }
   }
   if (finalNote[thisDeck] != 0)
@@ -627,11 +633,6 @@ void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
 #ifdef DO_MIDIHW
   MIDI.sendNoteOn(_note, _velocity, _channel);
 #endif
-
-#ifdef DO_MIDIUSB
-  noteOn(_channel, _note, _velocity); // Channel 0, middle C, normal velocity
-  MidiUSB.flush();
-#endif
 }
 
 //verify if NO ONE encoder button is pressed
@@ -673,26 +674,6 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
   //if all tests where OK
   return true;
 }
-
-#ifdef DO_MIDIUSB
-void noteOn(byte channel, byte pitch, byte velocity)
-{
-  midiEventPacket_t noteOn = {0x09, 0x90 | channel, pitch, velocity};
-  MidiUSB.sendMIDI(noteOn);
-}
-
-void noteOff(byte channel, byte pitch, byte velocity)
-{
-  midiEventPacket_t noteOff = {0x08, 0x80 | channel, pitch, velocity};
-  MidiUSB.sendMIDI(noteOff);
-}
-
-void controlChange(byte channel, byte control, byte value)
-{
-  midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
-  MidiUSB.sendMIDI(event);
-}
-#endif
 
 void readActionMenu()
 {
@@ -914,7 +895,7 @@ void loop()
   {
     melodieUpdate.debounce();
     int16_t read;
-    //8bit resolution parameters
+    //add 8bit resolution parameter to a filter
     read = paramFilter[queuedMelodyParameter]->add(analogRead(queuedMelodyParameter) >> 4);
     boolean newUpdates;
     newUpdates = melody->updateParameters(queuedMelodyParameter, read);
@@ -933,4 +914,12 @@ void loop()
     infoState = false;
     digitalWrite(TRIGOUTPATTERNPIN1, LOW);
   }
+
+  // //clock source switch from external to internal
+  // if (externalClockSource && switchBackToInternalClock.debounced())
+  // {
+  //   externalClockSource = false;
+  //   Timer3.attachInterrupt(ISRfireTimer3);
+  //   Timer3.start(u_bpm);
+  // }
 }
