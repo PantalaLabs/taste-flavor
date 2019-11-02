@@ -44,17 +44,17 @@ int menuAdcSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715
 
 //display
 #define I2C_ADDRESS 0x3C
-#define DISPLAY_WIDTH 128    // OLED Oled width, in pixels
-#define DISPLAY_HEIGHT 64    // OLED Oled height, in pixels
-#define TEXTLINE_HEIGHT 9    // OLED Oled height, in pixels
-#define OLEDUPDATETIME 35000 //microsseconds to update display
+#define DISPLAY_WIDTH 128       // Display Display width, in pixels
+#define DISPLAY_HEIGHT 64       // Display Display height, in pixels
+#define TEXTLINE_HEIGHT 9       // Display Display height, in pixels
+#define DisplayUPDATETIME 35000 //microsseconds to update display
 #define DOTGRIDINIT 36
 #define GRIDPATTERNHEIGHT 4
 
 //adafruit
 #include <Adafruit_SSD1306.h>
-#define OLED_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
+#define Display_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, Display_RESET);
 
 //sequencer
 #define MAXSTEPS 64      //max step sequence
@@ -139,12 +139,12 @@ EventDebounce info(30);
 uint8_t infoState;
 
 //time related and bpm
-volatile uint32_t u_lastTick;               //last time tick was called
-volatile uint32_t u_tickInterval = 1000000; //tick interval
-boolean updateOledUpdateTimeShift = false;  //flag to update time shift
-int32_t u_timeShift = 1100;                 //default time shift keep the 100 microsseconds there
-int32_t u_timeShiftStep = 1000;             //time shift amount update step
-#define u_timeShiftLimit 20000              //time shift + and - limit
+volatile uint32_t u_lastTick;                 //last time tick was called
+volatile uint32_t u_tickInterval = 1000000;   //tick interval
+boolean updateDisplayUpdateTimeShift = false; //flag to update time shift
+int32_t u_timeShift = 1100;                   //default time shift keep the 100 microsseconds there
+int32_t u_timeShiftStep = 1000;               //time shift amount update step
+#define u_timeShiftLimit 20000                //time shift + and - limit
 volatile uint32_t sampleChangeWindowEndTime;
 uint16_t bpm = 125;
 uint32_t u_bpm = 0;
@@ -184,28 +184,28 @@ Rotary instr5encoder(ENCPINAINSTR5, ENCPINBINSTR5);
 Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &CROSSencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
-boolean updateOledBrowseMood = false;      //schedule some Oled update
-boolean updateOledSelectMood = false;      //schedule some Oled update
-boolean updateOledUpdateBpm = false;       //update bpm
-int16_t selectedMood = 0;                  //actual selected mood
-int16_t lastSelectedMood = 255;            //prevents to execute 2 times the same action
-int8_t previousMood = 0;                   //previous mood name
-int8_t lastCrossBarGraphValue = 127;       //0 to MAXINSTRUMENTS possible values
-int8_t updateOledUpdateCross = 0;          //schedule some Oled update
-int8_t updateOledInstrPattern = -1;        //update only one instrument pattern
-int8_t updateOledChangePlayingSample = -1; //update sample on rasp pi
-int8_t updateOledUpdategateLenght = -1;    //update gate lenght on right upper corner
-int8_t updateOledEraseInstrumentPattern = -1;
-int8_t updateOledTapInstrumentPattern = -1;
-int8_t updateOledRollbackInstrumentTap = -1;
-boolean updateOledModifierPressed = false;
-boolean defaultOledNotActiveYet = true;
+boolean updateDisplayBrowseMood = false;      //schedule some Display update
+boolean updateDisplaySelectMood = false;      //schedule some Display update
+boolean updateDisplayUpdateBpm = false;       //update bpm
+int16_t selectedMood = 0;                     //actual selected mood
+int16_t lastSelectedMood = 255;               //prevents to execute 2 times the same action
+int8_t previousMood = 0;                      //previous mood name
+int8_t lastCrossBarGraphValue = 127;          //0 to MAXINSTRUMENTS possible values
+int8_t updateDisplayUpdateCross = 0;          //schedule some Display update
+int8_t updateDisplayInstrPattern = -1;        //update only one instrument pattern
+int8_t updateDisplayChangePlayingSample = -1; //update sample on rasp pi
+int8_t updateDisplayUpdategateLenght = -1;    //update gate lenght on right upper corner
+int8_t updateDisplayEraseInstrumentPattern = -1;
+int8_t updateDisplayTapInstrumentPattern = -1;
+int8_t updateDisplayRollbackInstrumentTap = -1;
+boolean updateDisplayModifierPressed = false;
+boolean defaultDisplayNotActiveYet = true;
 boolean externalClockSource = 0; //0=internal , 1=external
 
 EventDebounce switchBackToInternalClock(3000);
 //sequencer
 volatile int8_t stepCount = 0;
-int8_t queuedEncoder = 0;
+int8_t queuedRotaryEncoder = 0;
 
 //mood
 #define MAXMOODS 4 //max moods
@@ -313,7 +313,7 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.display();
   delay(2000);
-  oledWelcome();
+  DisplayWelcome();
   display.display();
 
   //internal clock
@@ -394,7 +394,7 @@ void ISRfireTimer4()
     stepCount = 0;
     melody->resetStepCounter();
   }
-  sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
+  sampleChangeWindowEndTime = (micros() + u_tickInterval - DisplayUPDATETIME);
 }
 
 //close all trigger
@@ -422,7 +422,6 @@ void ISRendTriggers()
   }
 }
 
-
 //allows to change samples only upo to after 2/3 of the tick interval
 //to avoid to change sample the same time it was triggered
 boolean amIinsideSampleUpdateWindow()
@@ -448,7 +447,7 @@ void readRotaryEncoder(uint8_t _queued)
       selectedMood = constrain(selectedMood, 0, MAXMOODS - 1);
       if (lastSelectedMood != selectedMood)
       {
-        updateOledBrowseMood = true;
+        updateDisplayBrowseMood = true;
         lastSelectedMood = selectedMood;
       }
     }
@@ -459,12 +458,12 @@ void readRotaryEncoder(uint8_t _queued)
       {
         u_timeShift += encoderChange * u_timeShiftStep;
         u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
-        updateOledUpdateTimeShift = true;
+        updateDisplayUpdateTimeShift = true;
       }
       //if cross button is pressed and cross rotate CHANGE BPM
       else if (commandOption == COMMANDBPM)
       {
-        updateOledUpdateBpm = true;
+        updateDisplayUpdateBpm = true;
         bpm += encoderChange;
         u_bpm = bpm2micros4ppqn(bpm);
       }
@@ -472,7 +471,7 @@ void readRotaryEncoder(uint8_t _queued)
       { //or else , cross change
         crossfader += encoderChange;
         crossfader = constrain(crossfader, 0, MAXINSTRUMENTS);
-        updateOledUpdateCross = encoderChange;
+        updateDisplayUpdateCross = encoderChange;
       }
     }
     else
@@ -486,13 +485,13 @@ void readRotaryEncoder(uint8_t _queued)
           deck[thisDeck]->deckSamples[_instrum]->reward();
         else
           deck[thisDeck]->deckSamples[_instrum]->advance();
-        updateOledChangePlayingSample = _instrum;
+        updateDisplayChangePlayingSample = _instrum;
       }
       //if only SAME button pressed , change gate lenght
       else if (commandOption == COMMANDTRIGGERLENGHT)
       {
         deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
-        updateOledUpdategateLenght = _instrum;
+        updateDisplayUpdategateLenght = _instrum;
       }
       //nothing pressed, only pattern change , schedule event
       else if (noOneEncoderButtonIsPressed())
@@ -501,26 +500,26 @@ void readRotaryEncoder(uint8_t _queued)
           deck[thisDeck]->deckPatterns[_instrum]->reward();
         else
           deck[thisDeck]->deckPatterns[_instrum]->advance();
-        updateOledInstrPattern = _instrum; //flags to update this instrument on Display
+        updateDisplayInstrPattern = _instrum; //flags to update this instrument on Display
       }
     }
   }
 }
 
-//check if default Oled wasnt show yet
-void checkDefaultOled()
+//check if default Display wasnt show yet
+void checkDefaultDisplay()
 {
-  if (defaultOledNotActiveYet)
+  if (defaultDisplayNotActiveYet)
   {
-    defaultOledNotActiveYet = false;
+    defaultDisplayNotActiveYet = false;
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    oledShowBrowsedMood();
-    oledShowCrossBar(-1);
+    DisplayShowBrowsedMood();
+    DisplayShowCrossBar(-1);
   }
 }
 
-void oledWelcome()
+void DisplayWelcome()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -528,7 +527,7 @@ void oledWelcome()
   display.println(F("    and cross it -->"));
 }
 
-void oledShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
+void DisplayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
 {
   if (lastCrossBarGraphValue != _size)
   {
@@ -539,7 +538,7 @@ void oledShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pix
   }
 }
 
-void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper corner with the actual sample or pattern number
+void DisplayShowCornerInfo(uint8_t _parm, int16_t _val) //update Display right upper corner with the actual sample or pattern number
 {
   String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
   display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
@@ -559,33 +558,33 @@ void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper c
   }
 }
 
-void oledEraseLineAndSetText(uint8_t _line)
+void DisplayEraseLineAndSetText(uint8_t _line)
 {
   display.fillRect(0, _line * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
   display.setCursor(0, _line * TEXTLINE_HEIGHT); //set cursor position
 }
 
-void oledUpdateLineArea(uint8_t _line, String _content)
+void DisplayUpdateLineArea(uint8_t _line, String _content)
 {
-  oledEraseLineAndSetText(_line);
+  DisplayEraseLineAndSetText(_line);
   display.print(_content); //print previous mood name
 }
 
 uint8_t lastBrowsedMood;
-void oledShowBrowsedMood() //update almost all bottom Oled area with the name of the selected mood and all 6 available instruments
+void DisplayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
 {
   if (lastBrowsedMood != selectedMood)
   {
     lastBrowsedMood = selectedMood;
-    oledUpdateLineArea(3, moodKitName[selectedMood]);
+    DisplayUpdateLineArea(3, moodKitName[selectedMood]);
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
-      oledShowInstrPattern(instr, ROM);
+      DisplayShowInstrPattern(instr, ROM);
   }
 }
 
-void oledShowInstrPattern(uint8_t _instr, boolean _src)
+void DisplayShowInstrPattern(uint8_t _instr, boolean _src)
 {
-  oledEraseInstrumentPattern(_instr);
+  DisplayEraseInstrumentPattern(_instr);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
@@ -596,7 +595,7 @@ void oledShowInstrPattern(uint8_t _instr, boolean _src)
 }
 
 //erase exatctly one line pattern
-void oledEraseInstrumentPattern(uint8_t _instr)
+void DisplayEraseInstrumentPattern(uint8_t _instr)
 {
   display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }
@@ -659,109 +658,109 @@ void readActionMenu()
 
 void loop()
 {
-  //flags if any Oled update will be necessary in this cycle
-  boolean updateOled = false;
+  //flags if any Display update will be necessary in this cycle
+  boolean updateDisplay = false;
 
-  //read all processed encoders interruptions
-  queuedEncoder++;
-  if (queuedEncoder == MAXENCODERS)
-    queuedEncoder = 0;
-  readRotaryEncoder(queuedEncoder);
+  //read queued interruptred encoders
+  queuedRotaryEncoder++;
+  if (queuedRotaryEncoder == MAXENCODERS)
+    queuedRotaryEncoder = 0;
+  readRotaryEncoder(queuedRotaryEncoder);
 
-  //check for all Oled updates ===============================================================
+  //check if there is any async display update scheduled
   //mood browse
-  if (updateOledBrowseMood)
+  if (updateDisplayBrowseMood)
   {
-    checkDefaultOled();
-    oledShowBrowsedMood();
-    updateOledBrowseMood = false;
-    updateOled = true;
+    checkDefaultDisplay();
+    DisplayShowBrowsedMood();
+    updateDisplayBrowseMood = false;
+    updateDisplay = true;
   }
   //update right upper corner with bpm value
-  else if (updateOledUpdateBpm)
+  else if (updateDisplayUpdateBpm)
   {
-    updateOledUpdateBpm = false;
-    oledShowCornerInfo(2, bpm);
-    updateOled = true;
+    updateDisplayUpdateBpm = false;
+    DisplayShowCornerInfo(2, bpm);
+    updateDisplay = true;
   }
   //update cross bar changes and there is available time to load new sample and play it
   //this could be took off if using Tsunami
-  else if ((updateOledUpdateCross != 0) && amIinsideSampleUpdateWindow())
+  else if ((updateDisplayUpdateCross != 0) && amIinsideSampleUpdateWindow())
   {
-    checkDefaultOled();
-    oledShowCrossBar(crossfader);
-    updateOledUpdateCross = 0;
-    updateOled = true;
+    checkDefaultDisplay();
+    DisplayShowCrossBar(crossfader);
+    updateDisplayUpdateCross = 0;
+    updateDisplay = true;
   }
   //copy selected mood to new deck
-  else if (updateOledSelectMood && amIinsideSampleUpdateWindow())
+  else if (updateDisplaySelectMood && amIinsideSampleUpdateWindow())
   {
-    checkDefaultOled();
-    oledUpdateLineArea(1, moodKitName[previousMood]);
-    oledUpdateLineArea(2, moodKitName[selectedMood]);
+    checkDefaultDisplay();
+    DisplayUpdateLineArea(1, moodKitName[previousMood]);
+    DisplayUpdateLineArea(2, moodKitName[selectedMood]);
     previousMood = selectedMood;
-    oledShowCrossBar(-1);
+    DisplayShowCrossBar(-1);
     crossfader = 0;
-    updateOledSelectMood = false;
-    updateOled = true;
+    updateDisplaySelectMood = false;
+    updateDisplay = true;
   }
 
   //if only one intrument pattern changed
-  else if (updateOledInstrPattern != -1)
+  else if (updateDisplayInstrPattern != -1)
   {
-    oledShowInstrPattern(updateOledInstrPattern, RAM);
-    oledShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateOledInstrPattern]->getValue());
-    oledUpdateLineArea(3, "Custom");
-    updateOled = true;
-    updateOledInstrPattern = -1;
+    DisplayShowInstrPattern(updateDisplayInstrPattern, RAM);
+    DisplayShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateDisplayInstrPattern]->getValue());
+    DisplayUpdateLineArea(3, "Custom");
+    updateDisplay = true;
+    updateDisplayInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
-  else if ((updateOledChangePlayingSample != -1) && amIinsideSampleUpdateWindow())
+  else if ((updateDisplayChangePlayingSample != -1) && amIinsideSampleUpdateWindow())
   {
-    playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
-    oledUpdateLineArea(3, "Custom");
-    oledShowCornerInfo(1, deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue());
-    updateOled = true;
-    updateOledChangePlayingSample = -1;
+    playMidi(instrSampleMidiNote[updateDisplayChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue(), MIDICHANNEL);
+    DisplayUpdateLineArea(3, "Custom");
+    DisplayShowCornerInfo(1, deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue());
+    updateDisplay = true;
+    updateDisplayChangePlayingSample = -1;
   }
 
   //if time shift changed
-  else if (updateOledUpdateTimeShift)
+  else if (updateDisplayUpdateTimeShift)
   {
-    oledShowCornerInfo(3, (u_timeShift - 100) / 1000);
-    updateOled = true;
-    updateOledUpdateTimeShift = false;
+    DisplayShowCornerInfo(3, (u_timeShift - 100) / 1000);
+    updateDisplay = true;
+    updateDisplayUpdateTimeShift = false;
   }
   //if gate lenght changed
-  else if (updateOledUpdategateLenght != -1)
+  else if (updateDisplayUpdategateLenght != -1)
   {
-    oledShowCornerInfo(4, updateOledUpdategateLenght);
-    updateOled = true;
-    updateOledUpdategateLenght = -1;
+    DisplayShowCornerInfo(4, updateDisplayUpdategateLenght);
+    updateDisplay = true;
+    updateDisplayUpdategateLenght = -1;
   }
   //if erase pattern
-  else if (updateOledEraseInstrumentPattern != -1)
+  else if (updateDisplayEraseInstrumentPattern != -1)
   {
-    oledEraseInstrumentPattern(updateOledEraseInstrumentPattern); //clear pattern from display
-    updateOled = true;
-    updateOledEraseInstrumentPattern = -1;
+    DisplayEraseInstrumentPattern(updateDisplayEraseInstrumentPattern); //clear pattern from display
+    updateDisplay = true;
+    updateDisplayEraseInstrumentPattern = -1;
   }
   //if step should be tapped
-  else if (updateOledTapInstrumentPattern != -1)
+  else if (updateDisplayTapInstrumentPattern != -1)
   {
-    oledShowInstrPattern(updateOledTapInstrumentPattern, RAM); //update Oled with new inserted step
-    updateOled = true;
-    updateOledTapInstrumentPattern = -1;
+    DisplayShowInstrPattern(updateDisplayTapInstrumentPattern, RAM); //update Display with new inserted step
+    updateDisplay = true;
+    updateDisplayTapInstrumentPattern = -1;
   }
-  else if (updateOledRollbackInstrumentTap != -1)
+  else if (updateDisplayRollbackInstrumentTap != -1)
   {
-    oledShowInstrPattern(updateOledRollbackInstrumentTap, RAM); //update Oled with removed step
-    updateOled = true;
-    updateOledRollbackInstrumentTap = -1;
+    DisplayShowInstrPattern(updateDisplayRollbackInstrumentTap, RAM); //update Display with removed step
+    updateDisplay = true;
+    updateDisplayRollbackInstrumentTap = -1;
   }
 
-  //if any Oled update
-  if (updateOled)
+  //if any Display update
+  if (updateDisplay)
     display.display();
 
   //read interface inputs ===========================================================================================================
@@ -789,7 +788,7 @@ void loop()
     //send MIDI to pi to load samples
     for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
       playMidi(instrSampleMidiNote[i] + (10 * thisDeck), selectedMood - 1, MIDICHANNEL);
-    updateOledSelectMood = true;
+    updateDisplaySelectMood = true;
     interfaceEvent.debounce(1000); //block any other interface event
   }
 
@@ -808,9 +807,9 @@ void loop()
       if (deck[thisDeck]->pattern->undoAvailable(i))
       {
         deck[thisDeck]->pattern->rollbackUndoStep(i, deck[thisDeck]->deckPatterns[i]->getValue()); //rollback the last saved undo
-        oledShowInstrPattern(i, RAM);                                                              //update Oled with new inserted step
-        updateOled = true;
-        updateOledRollbackInstrumentTap = i;
+        DisplayShowInstrPattern(i, RAM);                                                           //update Display with new inserted step
+        updateDisplay = true;
+        updateDisplayRollbackInstrumentTap = i;
         interfaceEvent.debounce(200);
       }
     }
@@ -822,7 +821,7 @@ void loop()
       //erase pattern IF possible
       deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
       interfaceEvent.debounce(1000);
-      updateOledEraseInstrumentPattern = i;
+      updateDisplayEraseInstrumentPattern = i;
     }
     //if any pattern should be permanently muted
     //cross encoder + action button
@@ -836,12 +835,12 @@ void loop()
     else if ((commandOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
     {
       //calculate if the tap will be saved on this step or into next
-      int8_t updateOledTapStep;
+      int8_t updateDisplayTapStep;
       if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
       {
         //tap this step
-        updateOledTapStep = stepCount;
-        if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep))
+        updateDisplayTapStep = stepCount;
+        if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep))
           //send midinote to play only this instrument if it was not already played
           playMidi(1, powint(2, 5 - i), MIDICHANNEL);
       }
@@ -852,11 +851,11 @@ void loop()
         nextStep++;
         if (nextStep >= MAXSTEPS)
           nextStep = 0;
-        updateOledTapStep = nextStep;
+        updateDisplayTapStep = nextStep;
         //no need to send midinote to play this instrument because it will be saved to next step cycle
       }
-      deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateOledTapStep);
-      updateOledTapInstrumentPattern = i;
+      deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep);
+      updateDisplayTapInstrumentPattern = i;
       interfaceEvent.debounce(u_tickInterval / 1000);
     }
   }
