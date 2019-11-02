@@ -285,14 +285,15 @@ void setup()
   }
   analogWrite(DAC0, 0);
   digitalWrite(TRIGOUTPATTERNPIN1, LOW);
-  //DAC 0-5v test
-  // while (1)
-  // {
-  //   analogWrite(DAC0, 4095);
-  //   delay(5000);
-  //   analogWrite(DAC0, 0);
-  //   delay(5000);
-  // }
+
+  //if mood encoder button pressed , do a full DAC voltage test
+  while (!digitalRead(encoderButtonPins[0]))
+  {
+    analogWrite(DAC0, 4095);
+    delay(5000);
+    analogWrite(DAC0, 0);
+    delay(5000);
+  }
 
   //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
@@ -320,21 +321,29 @@ void setup()
   Timer3.attachInterrupt(ISRfireTimer3);
   Timer3.start(u_bpm);
   Timer4.attachInterrupt(ISRfireTimer4);
-  Timer5.attachInterrupt(endTriggers);
+  Timer5.attachInterrupt(ISRendTriggers);
 }
 
-// void ISRswitchToExternal()
+// void ISRmanualFireTimer3()
 // {
+//   noInterrupts();
 //   externalClockSource = true;
-//   switchBackToInternalClock.debounce();
 //   Timer3.detachInterrupt();
 //   Timer3.stop();
-//   ISRfireTimer3();
+//   u_tickInterval = micros() - u_lastTick;
+//   u_lastTick = micros();
+//   if (u_timeShift >= 0)
+//     Timer4.start(u_timeShift);
+//   else
+//     Timer4.start(u_tickInterval + u_timeShift);
+//   interrupts();
+//   switchBackToInternalClock.debounce();
 // }
 
 //base clock
 void ISRfireTimer3()
 {
+  noInterrupts();
   Timer3.stop();
   u_tickInterval = micros() - u_lastTick;
   u_lastTick = micros();
@@ -343,6 +352,7 @@ void ISRfireTimer3()
   else
     Timer4.start(u_tickInterval + u_timeShift);
   Timer3.start(bpm2micros4ppqn(bpm));
+  interrupts();
 }
 
 //return if this instrument belongs to this or not to this deck
@@ -387,17 +397,10 @@ void ISRfireTimer4()
   sampleChangeWindowEndTime = (micros() + u_tickInterval - OLEDUPDATETIME);
 }
 
-//allows to change samples only upo to after 2/3 of the tick interval
-//to avoid to change sample the same time it was triggered
-boolean sampleUpdateWindow()
-{
-  return (micros() < sampleChangeWindowEndTime);
-}
-
 //close all trigger
 //  _ ______ _______ _______ _______
 //_| |      |       |       |       |______
-void endTriggers()
+void ISRendTriggers()
 {
   //compare all triggers times
   for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
@@ -417,6 +420,14 @@ void endTriggers()
     Timer5.stop();                    //stops trigger timer
     Timer5.start(EXTENDEDGATELENGHT); //start 80ms triggers timers
   }
+}
+
+
+//allows to change samples only upo to after 2/3 of the tick interval
+//to avoid to change sample the same time it was triggered
+boolean amIinsideSampleUpdateWindow()
+{
+  return (micros() < sampleChangeWindowEndTime);
 }
 
 //read queued encoder status
@@ -675,7 +686,7 @@ void loop()
   }
   //update cross bar changes and there is available time to load new sample and play it
   //this could be took off if using Tsunami
-  else if ((updateOledUpdateCross != 0) && sampleUpdateWindow())
+  else if ((updateOledUpdateCross != 0) && amIinsideSampleUpdateWindow())
   {
     checkDefaultOled();
     oledShowCrossBar(crossfader);
@@ -683,7 +694,7 @@ void loop()
     updateOled = true;
   }
   //copy selected mood to new deck
-  else if (updateOledSelectMood && sampleUpdateWindow())
+  else if (updateOledSelectMood && amIinsideSampleUpdateWindow())
   {
     checkDefaultOled();
     oledUpdateLineArea(1, moodKitName[previousMood]);
@@ -705,7 +716,7 @@ void loop()
     updateOledInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
-  else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
+  else if ((updateOledChangePlayingSample != -1) && amIinsideSampleUpdateWindow())
   {
     playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
     oledUpdateLineArea(3, "Custom");
