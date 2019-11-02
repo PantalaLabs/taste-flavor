@@ -27,6 +27,13 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
+<li>11/02/2019<br>
+  Yes !!! The Wavetrigger board works. So charming! <br>
+  Goodbye rasberry pi and Pisound (great interface, but it wil be reserved to another project).<br>
+  Made the logical/phisical integration with current PCB.<br>
+  Made new panel too. Both were sent to manufacturer. <br>
+  Maybe this is the final prototype !!!!<br>
+
 <li>10/31/2019<br>
   The new proto is build and running<br>
   The cv sequencer was coded and it creates very nice melodies<br>
