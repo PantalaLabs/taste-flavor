@@ -32,7 +32,11 @@ UPDATES:
   Goodbye rasberry pi and Pisound (great interface, but it wil be reserved to another project).<br>
   Made the logical/phisical integration with current PCB.<br>
   Made new panel too. Both were sent to manufacturer. <br>
-  Maybe this is the final prototype !!!!<br>
+  I hope this will gonna be the the final prototype!<br>
+  
+  Testing 1..2..3<br>
+  <img alt="" style="border-width:0" src="0.jpg" /></a><br>
+  
 
 <li>10/31/2019<br>
   The new proto is build and running<br>
