@@ -1,15 +1,8 @@
 ```
 Task manager:
                                              PCB         CODE    PANEL
-relative clock (midi delay compensation)      -           O         -
 pattern reset clock in                        o           X         o
-pattern init clock out                        O           O         o
-external usb cable for RPi                    X           x         x
-CV sequencer                                  o           O         o
-algorithm stepped cv                          -           o         o
-change hardware pins                          o           o         -
 clock select                                  o           x         o
-variable trigger lenght                       o           o         -
 
 - not applicable
 x scheduled
