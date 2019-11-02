@@ -42,24 +42,22 @@ AnalogInput menuCommand(A6);
 #define MAXPARAMETERS 8 //max step sequence
 int menuAdcSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715, 1023};
 
+//display
 #define I2C_ADDRESS 0x3C
-#define DISPLAY_WIDTH 128 // OLED Oled width, in pixels
-#define DISPLAY_HEIGHT 64 // OLED Oled height, in pixels
-#define TEXTLINE_HEIGHT 9 // OLED Oled height, in pixels
+#define DISPLAY_WIDTH 128    // OLED Oled width, in pixels
+#define DISPLAY_HEIGHT 64    // OLED Oled height, in pixels
+#define TEXTLINE_HEIGHT 9    // OLED Oled height, in pixels
+#define OLEDUPDATETIME 35000 //microsseconds to update display
+#define DOTGRIDINIT 36
+#define GRIDPATTERNHEIGHT 4
 
 //adafruit
 #include <Adafruit_SSD1306.h>
 #define OLED_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 
-//oled
-#define OLEDUPDATETIME 35000 //microsseconds to update display
-#define DOTGRIDINIT 36
-#define GRIDPATTERNHEIGHT 4
-
 //sequencer
 #define MAXSTEPS 64      //max step sequence
-#define MYCHANNEL 1      //midi channel for data transmission
 #define MAXENCODERS 8    //total of encoders
 #define MOODENCODER 0    //MOOD encoder id
 #define CROSSENCODER 1   //CROSS encoder id
@@ -224,22 +222,6 @@ uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
 #define ROM 1
 int8_t crossfader = 0;
 
-void ISRfireTimer3(); //base clock
-void ISRfireTimer4(); //shifted clock
-void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel);
-void readEncoder();
-void checkDefaultOled();
-void oledWelcome();
-void oledEraseBrowsedMoodName();
-void oledShowBrowsedMood();
-void oledShowCrossBar();
-void oledShowCornerInfo(uint8_t _parm, int16_t _val);
-void oledShowInstrPattern(uint8_t _instr, boolean _src);
-void oledShowPreviousMood();
-void oledCustomMoodName();
-void oledShowSelectedMood();
-void endTriggers();
-
 void setup()
 {
   analogWriteResolution(12);
@@ -262,10 +244,10 @@ void setup()
   melody = new Melody(64);
 
   for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
-    paramFilter[i] = new Filter();
+    paramFilter[i] = new Filter(6);
 
   // pinMode(TRIGGERINPIN, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToInternal, RISING);
+  // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToExternal, RISING);
 
   //start all encoders
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -341,7 +323,7 @@ void setup()
   Timer5.attachInterrupt(endTriggers);
 }
 
-// void ISRswitchToInternal()
+// void ISRswitchToExternal()
 // {
 //   externalClockSource = true;
 //   switchBackToInternalClock.debounce();
@@ -438,7 +420,7 @@ void endTriggers()
 }
 
 //read queued encoder status
-void readEncoder(uint8_t _queued)
+void readRotaryEncoder(uint8_t _queued)
 {
   unsigned char result = encoders[_queued]->process();
   if ((result == 16) || (result == 32))
@@ -551,7 +533,6 @@ void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper c
   String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
   display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
   display.setCursor(70, 0);
-  display.setTextColor(WHITE);
   display.print(rightCornerInfo[_parm]);
   display.print(":");
   switch (_parm)
@@ -567,31 +548,16 @@ void oledShowCornerInfo(uint8_t _parm, int16_t _val) //update Oled right upper c
   }
 }
 
-void oledShowPreviousMood()
+void oledEraseLineAndSetText(uint8_t _line)
 {
-  display.fillRect(0, TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT, BLACK);
-  display.setTextColor(WHITE);
-  display.setCursor(0, TEXTLINE_HEIGHT);    //set cursor position
-  display.print(moodKitName[previousMood]); //print previous mood name
+  display.fillRect(0, _line * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
+  display.setCursor(0, _line * TEXTLINE_HEIGHT); //set cursor position
 }
 
-void oledShowSelectedMood()
+void oledUpdateLineArea(uint8_t _line, String _content)
 {
-  display.fillRect(0, 2 * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT, BLACK);
-  display.setTextColor(WHITE);
-  display.setCursor(0, 2 * TEXTLINE_HEIGHT); //set cursor position
-  display.print(moodKitName[selectedMood]);  //print selected mood name
-}
-void oledCustomMoodName()
-{
-  oledEraseBrowsedMoodName();
-  display.setTextColor(WHITE);
-  display.setCursor(0, 3 * TEXTLINE_HEIGHT); //set cursor position
-  display.print("Custom");                   //print Custom name
-}
-void oledEraseBrowsedMoodName()
-{
-  display.fillRect(0, 3 * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
+  oledEraseLineAndSetText(_line);
+  display.print(_content); //print previous mood name
 }
 
 uint8_t lastBrowsedMood;
@@ -600,10 +566,7 @@ void oledShowBrowsedMood() //update almost all bottom Oled area with the name of
   if (lastBrowsedMood != selectedMood)
   {
     lastBrowsedMood = selectedMood;
-    oledEraseBrowsedMoodName();
-    display.setTextColor(WHITE);
-    display.setCursor(0, 3 * TEXTLINE_HEIGHT);               //set cursor position
-    display.print(moodKitName[selectedMood]);                //print mood name
+    oledUpdateLineArea(3, moodKitName[selectedMood]);
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
       oledShowInstrPattern(instr, ROM);
   }
@@ -612,7 +575,6 @@ void oledShowBrowsedMood() //update almost all bottom Oled area with the name of
 void oledShowInstrPattern(uint8_t _instr, boolean _src)
 {
   oledEraseInstrumentPattern(_instr);
-  display.setTextColor(WHITE);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
@@ -693,7 +655,7 @@ void loop()
   queuedEncoder++;
   if (queuedEncoder == MAXENCODERS)
     queuedEncoder = 0;
-  readEncoder(queuedEncoder);
+  readRotaryEncoder(queuedEncoder);
 
   //check for all Oled updates ===============================================================
   //mood browse
@@ -724,8 +686,8 @@ void loop()
   else if (updateOledSelectMood && sampleUpdateWindow())
   {
     checkDefaultOled();
-    oledShowPreviousMood();
-    oledShowSelectedMood();
+    oledUpdateLineArea(1, moodKitName[previousMood]);
+    oledUpdateLineArea(2, moodKitName[selectedMood]);
     previousMood = selectedMood;
     oledShowCrossBar(-1);
     crossfader = 0;
@@ -738,7 +700,7 @@ void loop()
   {
     oledShowInstrPattern(updateOledInstrPattern, RAM);
     oledShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateOledInstrPattern]->getValue());
-    oledCustomMoodName();
+    oledUpdateLineArea(3, "Custom");
     updateOled = true;
     updateOledInstrPattern = -1;
   }
@@ -746,7 +708,7 @@ void loop()
   else if ((updateOledChangePlayingSample != -1) && sampleUpdateWindow())
   {
     playMidi(instrSampleMidiNote[updateOledChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue(), MIDICHANNEL);
-    oledCustomMoodName();
+    oledUpdateLineArea(3, "Custom");
     oledShowCornerInfo(1, deck[thisDeck]->deckSamples[updateOledChangePlayingSample]->getValue());
     updateOled = true;
     updateOledChangePlayingSample = -1;
