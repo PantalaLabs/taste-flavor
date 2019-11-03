@@ -6,66 +6,64 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
 #define DO_SERIAL false
-#define DO_MIDIHW true
 
-#ifdef DO_MIDIHW
-#include <MIDI.h>
-MIDI_CREATE_DEFAULT_INSTANCE();
-#endif
-
+#include <Arduino.h>
 #include <PantalaDefines.h>
 #include <EventDebounce.h>
 #include <Rotary.h>
 #include <DueTimer.h>
 #include <AnalogInput.h>
-#include "Deck.h"
-#include "Patterns.h"
-#include "Melody.h"
 
+//main objects
+
+#include "Deck.h"
 Deck *deck[2];
+
+#include "Patterns.h"
 Patterns *pattern;
+
+#include "Melody.h"
 Melody *melody;
 
-uint8_t commandOption;
+#include <wavTrigger.h>
+wavTrigger wTrig;
+
+//ladder menu
+#define MAXPARAMETERS 8
 #define COMMANDSAMPLE 1
 #define COMMANDBPM 2
-#define COMMANDTIMESHIFT 3
+#define COMMANDLATENCYCOMP 3
 #define COMMANDTAP 4
 #define COMMANDUNDO 5
 #define COMMANDSILENCE 6
 #define COMMANDERASE 7
 #define COMMANDTRIGGERLENGHT 8
-
-#define MAXMELODYPARMS 6
-
-AnalogInput menuCommand(A6);
-#define MAXPARAMETERS 8 //max step sequence
-int menuAdcSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715, 1023};
+AnalogInput ladderMenu(A6);
+uint8_t laddderMenuOption;
+int laddderMenuSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715, 1023};
+EventDebounce laddderMenuReadInterval(60);
 
 //display
 #define I2C_ADDRESS 0x3C
-#define DISPLAY_WIDTH 128       // Display Display width, in pixels
-#define DISPLAY_HEIGHT 64       // Display Display height, in pixels
-#define TEXTLINE_HEIGHT 9       // Display Display height, in pixels
-#define DisplayUPDATETIME 35000 //microsseconds to update display
+#define DISPLAY_WIDTH 128       // display width, in pixels
+#define DISPLAY_HEIGHT 64       // display height, in pixels
+#define TEXTLINE_HEIGHT 9       // text line height, in pixels
+#define DISPLAYUPDATETIME 35000 //microsseconds to update display
 #define DOTGRIDINIT 36
 #define GRIDPATTERNHEIGHT 4
 
 //adafruit
 #include <Adafruit_SSD1306.h>
-#define Display_RESET 47 // Reset pin # (or -1 if sharing Arduino reset pin)
-Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, Display_RESET);
+#define OLED_RESET 45 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 
 //sequencer
+#define MAXMELODYPARMS 6 //max ppotentiometer arameters
 #define MAXSTEPS 64      //max step sequence
 #define MAXENCODERS 8    //total of encoders
 #define MOODENCODER 0    //MOOD encoder id
 #define CROSSENCODER 1   //CROSS encoder id
 #define MAXINSTRUMENTS 6 //total of instruments
-#define MIDICHANNEL 1    //standart drum midi channel
-#define MOODMIDINOTE 20  //midi note to mood message
-#define CROSSMIDINOTE 21 //midi note to cross message
-
 uint8_t queuedMelodyParameter;
 Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 
@@ -119,6 +117,8 @@ Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 #define TRIGOUTPIN5 23
 #define TRIGOUTPIN6 27
 
+#define MELODYPARAMSET 47
+
 #define ACTIONPININSTR1 6
 #define ACTIONPININSTR2 4
 #define ACTIONPININSTR3 2
@@ -139,20 +139,16 @@ EventDebounce info(30);
 uint8_t infoState;
 
 //time related and bpm
-volatile uint32_t u_lastTick;                 //last time tick was called
-volatile uint32_t u_tickInterval = 1000000;   //tick interval
-boolean updateDisplayUpdateTimeShift = false; //flag to update time shift
-int32_t u_timeShift = 1100;                   //default time shift keep the 100 microsseconds there
-int32_t u_timeShiftStep = 1000;               //time shift amount update step
-#define u_timeShiftLimit 20000                //time shift + and - limit
+volatile uint32_t u_lastTick;                   //last time tick was called
+volatile uint32_t u_tickInterval = 1000000;     //tick interval
+boolean updateDisplayUpdateLatencyComp = false; //flag to update latency compensation
+int32_t u_LatencyComp = 1100;                   //default latency compensation keep the 100 microsseconds there
+int32_t u_LatencyCompStep = 1000;               //latency compensation amount update step
+#define u_LatencyCompLimit 20000                //latency compensation + and - limit
 volatile uint32_t sampleChangeWindowEndTime;
 uint16_t bpm = 125;
 uint32_t u_bpm = 0;
 uint8_t powArray[6] = {1, 2, 4, 8, 16, 32};
-
-//MIDI
-uint8_t instrSampleMidiNote[MAXINSTRUMENTS] = {10, 11, 12, 13, 14, 15};  //midi note to sample message
-uint8_t instrPatternMidiNote[MAXINSTRUMENTS] = {20, 21, 22, 23, 24, 25}; //midi note to pattern message
 
 #define MAXGATELENGHTS 8
 #define DEFAULTGATELENGHT 5000
@@ -164,7 +160,6 @@ volatile int8_t gateLenghtCounter = 0;
 uint8_t triggerPins[MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, TRIGOUTPIN4, TRIGOUTPIN5, TRIGOUTPIN6};
 
 //encoders buttons : mood, cross, instruments
-uint8_t queuedParameter = 0; //???????????????????????????????????
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
 boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t instrActionPins[MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
@@ -184,14 +179,14 @@ Rotary instr5encoder(ENCPINAINSTR5, ENCPINBINSTR5);
 Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&MOODencoder, &CROSSencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
-boolean updateDisplayBrowseMood = false;      //schedule some Display update
-boolean updateDisplaySelectMood = false;      //schedule some Display update
+boolean updateDisplayBrowseMood = false;      //schedule some display update
+boolean updateDisplaySelectMood = false;      //schedule some display update
 boolean updateDisplayUpdateBpm = false;       //update bpm
 int16_t selectedMood = 0;                     //actual selected mood
 int16_t lastSelectedMood = 255;               //prevents to execute 2 times the same action
 int8_t previousMood = 0;                      //previous mood name
 int8_t lastCrossBarGraphValue = 127;          //0 to MAXINSTRUMENTS possible values
-int8_t updateDisplayUpdateCross = 0;          //schedule some Display update
+int8_t updateDisplayUpdateCross = 0;          //schedule some display update
 int8_t updateDisplayInstrPattern = -1;        //update only one instrument pattern
 int8_t updateDisplayChangePlayingSample = -1; //update sample on rasp pi
 int8_t updateDisplayUpdategateLenght = -1;    //update gate lenght on right upper corner
@@ -213,7 +208,7 @@ String moodKitName[MAXMOODS] = {"", "P.Labs-Empty Room", "P.Labs-Choke", "P.Labs
 uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
-    {2, 3, 3, 3, 3, 1}, //P.Labs-Choke
+    {2, 3, 3, 4, 3, 1}, //P.Labs-Choke
     {2, 3, 4, 2, 3, 1}  //P.Labs-April23
 };
 
@@ -227,11 +222,7 @@ void setup()
   analogWriteResolution(12);
   analogReadResolution(10);
   pinMode(DAC0, OUTPUT);
-  menuCommand.setMenu(menuAdcSeparators, MAXPARAMETERS + 1);
-
-#ifdef DO_MIDIHW
-  MIDI.begin();
-#endif
+  ladderMenu.setMenu(laddderMenuSeparators, MAXPARAMETERS + 1);
 
 #ifdef DO_SERIAL
   Serial.begin(9600);
@@ -295,14 +286,26 @@ void setup()
     delay(5000);
   }
 
+  // WAV Trigger startup at 57600
+  delay(1000);
+  wTrig.start();
+  delay(10);
+  wTrig.stopAllTracks();
+  wTrig.masterGain(-9);
+  wTrig.samplerateOffset(0);
+  wTrig.setReporting(true);
+  delay(100);
+
   //setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   {
+#ifdef DO_SERIAL
     // Address 0x3D for 128x64
     Serial.begin(9600);
     Serial.println(F("SSD1306 allocation failed"));
     for (;;)
       ; // Don't proceed
+#endif
   }
   display.clearDisplay();
   display.setTextSize(1);      // Normal 1:1 pixel scale
@@ -311,9 +314,21 @@ void setup()
   display.setCursor(0, 0);
   display.println(F("Pantala Labs"));
   display.println(F("Taste & Flavor"));
+  display.println(F(""));
+
+  char gWTrigVersion[21];
+  if (wTrig.getVersion(gWTrigVersion, VERSION_STRING_LEN))
+  {
+    display.println(F(gWTrigVersion));
+    display.print(wTrig.getNumTracks());
+    display.println(F(" tracks"));
+  }
+  else
+    display.println(F("No comm WT"));
+  wTrig.setReporting(false);
   display.display();
   delay(2000);
-  DisplayWelcome();
+  displayWelcome();
   display.display();
 
   //internal clock
@@ -332,10 +347,10 @@ void setup()
 //   Timer3.stop();
 //   u_tickInterval = micros() - u_lastTick;
 //   u_lastTick = micros();
-//   if (u_timeShift >= 0)
-//     Timer4.start(u_timeShift);
+//   if (u_LatencyComp >= 0)
+//     Timer4.start(u_LatencyComp);
 //   else
-//     Timer4.start(u_tickInterval + u_timeShift);
+//     Timer4.start(u_tickInterval + u_LatencyComp);
 //   interrupts();
 //   switchBackToInternalClock.debounce();
 // }
@@ -347,10 +362,10 @@ void ISRfireTimer3()
   Timer3.stop();
   u_tickInterval = micros() - u_lastTick;
   u_lastTick = micros();
-  if (u_timeShift >= 0)
-    Timer4.start(u_timeShift);
+  if (u_LatencyComp >= 0)
+    Timer4.start(u_LatencyComp);
   else
-    Timer4.start(u_tickInterval + u_timeShift);
+    Timer4.start(u_tickInterval + u_LatencyComp);
   Timer3.start(bpm2micros4ppqn(bpm));
   interrupts();
 }
@@ -367,24 +382,28 @@ void ISRfireTimer4()
   noInterrupts();
   Timer5.start(DEFAULTGATELENGHT);                         //start 5ms first trigger timer
   Timer4.stop();                                           //stop timer shift
-  uint8_t finalNote[2] = {0, 0};                           //calculate final noteVelocity
   for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
   {
     boolean targetDeck;
     targetDeck = crossfadedDeck(instr);
-    if (!deck[targetDeck]->permanentMute[instr]                                                                             //
-        && !instrActionState[instr]                                                                                         //
-        && deck[targetDeck]->pattern->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount) //
-    )
+    //if this step wasnt permanently muted
+    if (!deck[targetDeck]->permanentMute[instr]
+        //and this step wasnt manually muted
+        && !instrActionState[instr]
+        // //and this step wasnt manually tapped
+        // && !deck[targetDeck]->tappedStep[instr]
+        //and this is an real pattern step
+        && deck[targetDeck]->pattern->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
-      finalNote[targetDeck] = finalNote[targetDeck] + powArray[instr]; //acumulate to play this or previous instrument
+      //see : deck[...]->cue(selectedMood - 1...alread subtract 1 position when loading to deck
+      uint16_t trackId = deck[targetDeck]->id * 6 + (instr + 1);
+      wTrig.trackGain(trackId, -6);
+      wTrig.trackLoad(trackId);
     }
+    deck[targetDeck]->tappedStep[instr] = false; //reset any tapped step
   }
-  if (finalNote[thisDeck] != 0)
-    playMidi(thisDeck + 1, finalNote[thisDeck], MIDICHANNEL); //send midinote to this deck with binary coded trigger message
-  if (finalNote[!thisDeck] != 0)
-    playMidi(!thisDeck + 1, finalNote[!thisDeck], MIDICHANNEL); //send midinote to other deck with binary coded trigger message
+  wTrig.resumeAllInSync();
   interrupts();
   analogWrite(DAC0, melody->getNote());
   gateLenghtCounter = 0;
@@ -394,7 +413,7 @@ void ISRfireTimer4()
     stepCount = 0;
     melody->resetStepCounter();
   }
-  sampleChangeWindowEndTime = (micros() + u_tickInterval - DisplayUPDATETIME);
+  sampleChangeWindowEndTime = (micros() + u_tickInterval - DISPLAYUPDATETIME);
 }
 
 //close all trigger
@@ -454,14 +473,14 @@ void readRotaryEncoder(uint8_t _queued)
     else if (_queued == CROSSENCODER)
     {
       //if cross button AND cross button are pressed and cross rotate change timer shift
-      if (commandOption == COMMANDTIMESHIFT)
+      if (laddderMenuOption == COMMANDLATENCYCOMP)
       {
-        u_timeShift += encoderChange * u_timeShiftStep;
-        u_timeShift = constrain(u_timeShift, -u_timeShiftLimit, u_timeShiftLimit);
-        updateDisplayUpdateTimeShift = true;
+        u_LatencyComp += encoderChange * u_LatencyCompStep;
+        u_LatencyComp = constrain(u_LatencyComp, -u_LatencyCompLimit, u_LatencyCompLimit);
+        updateDisplayUpdateLatencyComp = true;
       }
       //if cross button is pressed and cross rotate CHANGE BPM
-      else if (commandOption == COMMANDBPM)
+      else if (laddderMenuOption == COMMANDBPM)
       {
         updateDisplayUpdateBpm = true;
         bpm += encoderChange;
@@ -479,7 +498,7 @@ void readRotaryEncoder(uint8_t _queued)
       //all other instrument encoders
       uint8_t _instrum = _queued - 2;
       //if only one ASSOCIATED modifier pressed
-      if (commandOption == COMMANDSAMPLE)
+      if (laddderMenuOption == COMMANDSAMPLE)
       {
         if (encoderChange == -1)
           deck[thisDeck]->deckSamples[_instrum]->reward();
@@ -488,7 +507,7 @@ void readRotaryEncoder(uint8_t _queued)
         updateDisplayChangePlayingSample = _instrum;
       }
       //if only SAME button pressed , change gate lenght
-      else if (commandOption == COMMANDTRIGGERLENGHT)
+      else if (laddderMenuOption == COMMANDTRIGGERLENGHT)
       {
         deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
         updateDisplayUpdategateLenght = _instrum;
@@ -500,13 +519,13 @@ void readRotaryEncoder(uint8_t _queued)
           deck[thisDeck]->deckPatterns[_instrum]->reward();
         else
           deck[thisDeck]->deckPatterns[_instrum]->advance();
-        updateDisplayInstrPattern = _instrum; //flags to update this instrument on Display
+        updateDisplayInstrPattern = _instrum; //flags to update this instrument on display
       }
     }
   }
 }
 
-//check if default Display wasnt show yet
+//check if default display wasnt show yet
 void checkDefaultDisplay()
 {
   if (defaultDisplayNotActiveYet)
@@ -514,12 +533,12 @@ void checkDefaultDisplay()
     defaultDisplayNotActiveYet = false;
     display.clearDisplay();
     display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    DisplayShowBrowsedMood();
-    DisplayShowCrossBar(-1);
+    displayShowBrowsedMood();
+    displayShowCrossBar(-1);
   }
 }
 
-void DisplayWelcome()
+void displayWelcome()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -527,7 +546,7 @@ void DisplayWelcome()
   display.println(F("    and cross it -->"));
 }
 
-void DisplayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
+void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
 {
   if (lastCrossBarGraphValue != _size)
   {
@@ -538,7 +557,7 @@ void DisplayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 
   }
 }
 
-void DisplayShowCornerInfo(uint8_t _parm, int16_t _val) //update Display right upper corner with the actual sample or pattern number
+void displayShowCornerInfo(uint8_t _parm, int16_t _val) //update display right upper corner with the actual sample or pattern number
 {
   String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
   display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
@@ -558,33 +577,33 @@ void DisplayShowCornerInfo(uint8_t _parm, int16_t _val) //update Display right u
   }
 }
 
-void DisplayEraseLineAndSetText(uint8_t _line)
+void displayEraseLineAndSetText(uint8_t _line)
 {
   display.fillRect(0, _line * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
   display.setCursor(0, _line * TEXTLINE_HEIGHT); //set cursor position
 }
 
-void DisplayUpdateLineArea(uint8_t _line, String _content)
+void displayUpdateLineArea(uint8_t _line, String _content)
 {
-  DisplayEraseLineAndSetText(_line);
+  displayEraseLineAndSetText(_line);
   display.print(_content); //print previous mood name
 }
 
 uint8_t lastBrowsedMood;
-void DisplayShowBrowsedMood() //update almost all bottom Display area with the name of the selected mood and all 6 available instruments
+void displayShowBrowsedMood() //update almost all bottom display area with the name of the selected mood and all 6 available instruments
 {
   if (lastBrowsedMood != selectedMood)
   {
     lastBrowsedMood = selectedMood;
-    DisplayUpdateLineArea(3, moodKitName[selectedMood]);
+    displayUpdateLineArea(3, moodKitName[selectedMood]);
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++) //for each instrument
-      DisplayShowInstrPattern(instr, ROM);
+      displayShowInstrPattern(instr, ROM);
   }
 }
 
-void DisplayShowInstrPattern(uint8_t _instr, boolean _src)
+void displayShowInstrPattern(uint8_t _instr, boolean _src)
 {
-  DisplayEraseInstrumentPattern(_instr);
+  displayEraseInstrumentPattern(_instr);
   for (int8_t step = 0; step < (MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
@@ -595,16 +614,9 @@ void DisplayShowInstrPattern(uint8_t _instr, boolean _src)
 }
 
 //erase exatctly one line pattern
-void DisplayEraseInstrumentPattern(uint8_t _instr)
+void displayEraseInstrumentPattern(uint8_t _instr)
 {
   display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
-}
-
-void playMidi(uint8_t _note, uint8_t _velocity, uint8_t _channel)
-{
-#ifdef DO_MIDIHW
-  MIDI.sendNoteOn(_note, _velocity, _channel);
-#endif
 }
 
 //verify if NO ONE encoder button is pressed
@@ -647,18 +659,9 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
   return true;
 }
 
-void readActionMenu()
-{
-  queuedParameter++;
-  if (queuedParameter == MAXPARAMETERS)
-    queuedParameter = 0;
-  menuCommand.readSmoothed();
-  commandOption = menuCommand.getSmoothedMenuIndex() + 1;
-}
-
 void loop()
 {
-  //flags if any Display update will be necessary in this cycle
+  //flags if any display update will be necessary in this cycle
   boolean updateDisplay = false;
 
   //read queued interruptred encoders
@@ -668,38 +671,39 @@ void loop()
   readRotaryEncoder(queuedRotaryEncoder);
 
   //check if there is any async display update scheduled
+
   //mood browse
   if (updateDisplayBrowseMood)
   {
     checkDefaultDisplay();
-    DisplayShowBrowsedMood();
+    displayShowBrowsedMood();
     updateDisplayBrowseMood = false;
     updateDisplay = true;
   }
-  //update right upper corner with bpm value
+  //right upper corner with bpm value
   else if (updateDisplayUpdateBpm)
   {
     updateDisplayUpdateBpm = false;
-    DisplayShowCornerInfo(2, bpm);
+    displayShowCornerInfo(2, bpm);
     updateDisplay = true;
   }
-  //update cross bar changes and there is available time to load new sample and play it
+  //cross bar changes inside sample update window
   //this could be took off if using Tsunami
   else if ((updateDisplayUpdateCross != 0) && amIinsideSampleUpdateWindow())
   {
     checkDefaultDisplay();
-    DisplayShowCrossBar(crossfader);
+    displayShowCrossBar(crossfader);
     updateDisplayUpdateCross = 0;
     updateDisplay = true;
   }
-  //copy selected mood to new deck
+  //copy selected mood to new deck inside sample update window
   else if (updateDisplaySelectMood && amIinsideSampleUpdateWindow())
   {
     checkDefaultDisplay();
-    DisplayUpdateLineArea(1, moodKitName[previousMood]);
-    DisplayUpdateLineArea(2, moodKitName[selectedMood]);
+    displayUpdateLineArea(1, moodKitName[previousMood]);
+    displayUpdateLineArea(2, moodKitName[selectedMood]);
     previousMood = selectedMood;
-    DisplayShowCrossBar(-1);
+    displayShowCrossBar(-1);
     crossfader = 0;
     updateDisplaySelectMood = false;
     updateDisplay = true;
@@ -708,58 +712,56 @@ void loop()
   //if only one intrument pattern changed
   else if (updateDisplayInstrPattern != -1)
   {
-    DisplayShowInstrPattern(updateDisplayInstrPattern, RAM);
-    DisplayShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateDisplayInstrPattern]->getValue());
-    DisplayUpdateLineArea(3, "Custom");
+    displayShowInstrPattern(updateDisplayInstrPattern, RAM);
+    displayUpdateLineArea(3, "Custom");
+    displayShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateDisplayInstrPattern]->getValue());
     updateDisplay = true;
     updateDisplayInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
   else if ((updateDisplayChangePlayingSample != -1) && amIinsideSampleUpdateWindow())
   {
-    playMidi(instrSampleMidiNote[updateDisplayChangePlayingSample] + (10 * thisDeck), deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue(), MIDICHANNEL);
-    DisplayUpdateLineArea(3, "Custom");
-    DisplayShowCornerInfo(1, deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue());
+    displayUpdateLineArea(3, moodKitName[deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue()]);
+    displayShowCornerInfo(1, deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue());
     updateDisplay = true;
     updateDisplayChangePlayingSample = -1;
   }
-
-  //if time shift changed
-  else if (updateDisplayUpdateTimeShift)
+  //if latency compensation changed
+  else if (updateDisplayUpdateLatencyComp)
   {
-    DisplayShowCornerInfo(3, (u_timeShift - 100) / 1000);
+    displayShowCornerInfo(3, (u_LatencyComp - 100) / 1000);
     updateDisplay = true;
-    updateDisplayUpdateTimeShift = false;
+    updateDisplayUpdateLatencyComp = false;
   }
   //if gate lenght changed
   else if (updateDisplayUpdategateLenght != -1)
   {
-    DisplayShowCornerInfo(4, updateDisplayUpdategateLenght);
+    displayShowCornerInfo(4, updateDisplayUpdategateLenght);
     updateDisplay = true;
     updateDisplayUpdategateLenght = -1;
   }
   //if erase pattern
   else if (updateDisplayEraseInstrumentPattern != -1)
   {
-    DisplayEraseInstrumentPattern(updateDisplayEraseInstrumentPattern); //clear pattern from display
+    displayEraseInstrumentPattern(updateDisplayEraseInstrumentPattern); //clear pattern from display
     updateDisplay = true;
     updateDisplayEraseInstrumentPattern = -1;
   }
-  //if step should be tapped
+  //if step was tapped
   else if (updateDisplayTapInstrumentPattern != -1)
   {
-    DisplayShowInstrPattern(updateDisplayTapInstrumentPattern, RAM); //update Display with new inserted step
+    displayShowInstrPattern(updateDisplayTapInstrumentPattern, RAM); //update display with new inserted step
     updateDisplay = true;
     updateDisplayTapInstrumentPattern = -1;
   }
   else if (updateDisplayRollbackInstrumentTap != -1)
   {
-    DisplayShowInstrPattern(updateDisplayRollbackInstrumentTap, RAM); //update Display with removed step
+    displayShowInstrPattern(updateDisplayRollbackInstrumentTap, RAM); //update display with removed step
     updateDisplay = true;
     updateDisplayRollbackInstrumentTap = -1;
   }
 
-  //if any Display update
+  //if any display update
   if (updateDisplay)
     display.display();
 
@@ -771,10 +773,20 @@ void loop()
   //if new mood was selected....copy reference tables or create new mood in the cross area
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
+    interfaceEvent.debounce(1000); //block any other interface event
     //before load new mood, prepare current deck to leave it the same way user customized
     for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-      if (crossfadedDeck(instr) == !thisDeck) //if there were some instrument not morphed in the current deck then mute it
+    {
+      //if this instrument belongs to the other deck , merge 2 decks into one
+      if (crossfadedDeck(instr) == !thisDeck)
+      {
         deck[thisDeck]->permanentMute[instr] = true;
+        // deck[thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
+        // deck[thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
+        // deck[thisDeck]->permanentMute[instr] = deck[!thisDeck]->permanentMute[instr];
+        // deck[thisDeck]->changeGateLenghSize(instr, deck[!thisDeck]->gateLenghtSize[instr]);
+      }
+    }
     //change decks
     thisDeck = !thisDeck;
     deck[thisDeck]->cue(selectedMood - 1,                 //sample index
@@ -785,11 +797,7 @@ void loop()
                         moodKitPatterns[selectedMood][4], //
                         moodKitPatterns[selectedMood][5]  //
     );
-    //send MIDI to pi to load samples
-    for (uint8_t i = 0; i < MAXINSTRUMENTS; i++)
-      playMidi(instrSampleMidiNote[i] + (10 * thisDeck), selectedMood - 1, MIDICHANNEL);
     updateDisplaySelectMood = true;
-    interfaceEvent.debounce(1000); //block any other interface event
   }
 
   //read all action buttons (invert boolean state to make easy future comparation)
@@ -798,7 +806,7 @@ void loop()
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
     //if any tap should be rollbacked
     //cross encoder + instrument modifier + action button + custom pattern
-    if ((commandOption == COMMANDUNDO)                     //
+    if ((laddderMenuOption == COMMANDUNDO)                 //
         && instrActionState[i]                             //
         && deck[thisDeck]->pattern->isThisCustomPattern(i) //
         && interfaceEvent.debounced())
@@ -807,7 +815,7 @@ void loop()
       if (deck[thisDeck]->pattern->undoAvailable(i))
       {
         deck[thisDeck]->pattern->rollbackUndoStep(i, deck[thisDeck]->deckPatterns[i]->getValue()); //rollback the last saved undo
-        DisplayShowInstrPattern(i, RAM);                                                           //update Display with new inserted step
+        displayShowInstrPattern(i, RAM);                                                           //update display with new inserted step
         updateDisplay = true;
         updateDisplayRollbackInstrumentTap = i;
         interfaceEvent.debounce(200);
@@ -816,7 +824,7 @@ void loop()
 
     //cross encoder + instrument modifier + action button + not custom pattern
     //    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
-    else if ((commandOption == COMMANDERASE) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((laddderMenuOption == COMMANDERASE) && instrActionState[i] && interfaceEvent.debounced())
     {
       //erase pattern IF possible
       deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
@@ -825,42 +833,52 @@ void loop()
     }
     //if any pattern should be permanently muted
     //cross encoder + action button
-    else if ((commandOption == COMMANDSILENCE) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((laddderMenuOption == COMMANDSILENCE) && instrActionState[i] && interfaceEvent.debounced())
     {
       deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
       interfaceEvent.debounce(1000);
     }
     //if any pattern should be tapped
     //one instrument modifier + action button
-    else if ((commandOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
+    else if ((laddderMenuOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
     {
       //calculate if the tap will be saved on this step or into next
       int8_t updateDisplayTapStep;
       if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
       {
-        //tap this step
+        //DRAGGED STEP - tapped after trigger time
         updateDisplayTapStep = stepCount;
+        //if this step is empty, play sound
         if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep))
-          //send midinote to play only this instrument if it was not already played
-          playMidi(1, powint(2, 5 - i), MIDICHANNEL);
+        {
+          wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue()); //send a wtrig async play
+        }
       }
       else
       {
+        //RUSHED STEP - tapped before trigger time
+        updateDisplayTapStep = ((stepCount + 1) >= MAXSTEPS) ? 0 : (stepCount + 1);
         //tap saved to next step
-        int8_t nextStep = stepCount;
-        nextStep++;
-        if (nextStep >= MAXSTEPS)
-          nextStep = 0;
-        updateDisplayTapStep = nextStep;
-        //no need to send midinote to play this instrument because it will be saved to next step cycle
+        // int8_t nextStep = stepCount;
+        // nextStep++;
+        // if (nextStep >= MAXSTEPS)
+        //   nextStep = 0;
+        // updateDisplayTapStep = nextStep;
+        wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue()); //send a wtrig async play
+        deck[thisDeck]->tappedStep[i] = true;
       }
       deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep);
       updateDisplayTapInstrumentPattern = i;
       interfaceEvent.debounce(u_tickInterval / 1000);
     }
   }
-  //read action ladder menu
-  readActionMenu();
+  //spaced readings to action ladder menu
+  //if (laddderMenuReadInterval.debounced())
+  //  {
+  //laddderMenuReadInterval.debounce();
+  ladderMenu.readSmoothed();
+  laddderMenuOption = ladderMenu.getSmoothedMenuIndex() + 1;
+  // }
 
   //if it is time to read one new melody parameter
   if (melodieUpdate.debounced())
