@@ -5,7 +5,7 @@ Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
-#define DO_SERIAL false
+#define DO_SERIAL true
 
 #include <Arduino.h>
 #include <PantalaDefines.h>
@@ -16,6 +16,7 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 
 //main objects
 
+#include "Deck.h"
 #include "Deck.h"
 Deck *deck[2];
 
@@ -154,6 +155,7 @@ uint8_t powArray[6] = {1, 2, 4, 8, 16, 32};
 #define DEFAULTGATELENGHT 5000
 #define EXTENDEDGATELENGHT 40000
 boolean thisDeck = 0;
+//#define notthisDeck(y) (return ((y==0)?1:0)
 
 //triggers
 volatile int8_t gateLenghtCounter = 0;
@@ -203,13 +205,17 @@ volatile int8_t stepCount = 0;
 int8_t queuedRotaryEncoder = 0;
 
 //mood
-#define MAXMOODS 4 //max moods
-String moodKitName[MAXMOODS] = {"", "P.Labs-Empty Room", "P.Labs-Choke", "P.Labs-April23"};
+#define NOSAMPLE 0
+#define NOPATTERN 1
+
+#define MAXMOODS 5 //max valid moods including muted mood
+String moodKitName[MAXMOODS] = {"", "P.Labs-Empty Room", "P.Labs-Choke", "P.Labs-April23", "Carlos Pires-Drama"};
 uint8_t moodKitPatterns[MAXMOODS][MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
     {2, 3, 3, 4, 3, 1}, //P.Labs-Choke
-    {2, 3, 4, 2, 3, 1}  //P.Labs-April23
+    {2, 3, 4, 2, 3, 1}, //P.Labs-April23
+    {2, 5, 5, 2, 5, 4}  //Carlos Pires-Drama
 };
 
 //decks
@@ -321,10 +327,10 @@ void setup()
   {
     display.println(F(gWTrigVersion));
     display.print(wTrig.getNumTracks());
-    display.println(F(" tracks"));
+    display.println(F(" samples"));
   }
   else
-    display.println(F("No comm WT"));
+    display.println(F("No WT communication"));
   wTrig.setReporting(false);
   display.display();
   delay(2000);
@@ -388,16 +394,15 @@ void ISRfireTimer4()
     targetDeck = crossfadedDeck(instr);
     //if this step wasnt permanently muted
     if (!deck[targetDeck]->permanentMute[instr]
-        //and this step wasnt manually muted
+        //and wasnt manually muted
         && !instrActionState[instr]
-        // //and this step wasnt manually tapped
-        // && !deck[targetDeck]->tappedStep[instr]
+        // //and wasnt manually tapped
+        && !deck[targetDeck]->tappedStep[instr]
         //and this is an real pattern step
         && deck[targetDeck]->pattern->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
-      //see : deck[...]->cue(selectedMood - 1...alread subtract 1 position when loading to deck
-      uint16_t trackId = deck[targetDeck]->id * 6 + (instr + 1);
+      uint16_t trackId = deck[targetDeck]->id * 6 + instr;
       wTrig.trackGain(trackId, -6);
       wTrig.trackLoad(trackId);
     }
@@ -443,7 +448,7 @@ void ISRendTriggers()
 
 //allows to change samples only upo to after 2/3 of the tick interval
 //to avoid to change sample the same time it was triggered
-boolean amIinsideSampleUpdateWindow()
+boolean safetyZone()
 {
   return (micros() < sampleChangeWindowEndTime);
 }
@@ -689,7 +694,7 @@ void loop()
   }
   //cross bar changes inside sample update window
   //this could be took off if using Tsunami
-  else if ((updateDisplayUpdateCross != 0) && amIinsideSampleUpdateWindow())
+  else if ((updateDisplayUpdateCross != 0) && safetyZone())
   {
     checkDefaultDisplay();
     displayShowCrossBar(crossfader);
@@ -697,14 +702,43 @@ void loop()
     updateDisplay = true;
   }
   //copy selected mood to new deck inside sample update window
-  else if (updateDisplaySelectMood && amIinsideSampleUpdateWindow())
+  else if (updateDisplaySelectMood && safetyZone())
   {
     checkDefaultDisplay();
+    //before load new mood, prepare current deck to leave it the same way user customized
+    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    {
+      if (crossfadedDeck(instr) == !thisDeck)
+      {
+        //merge the other deck with this
+        deck[thisDeck]->permanentMute[instr] = true;
+        // deck[thisDeck]->deckSamples[instr]->reset();
+        // deck[thisDeck]->deckPatterns[instr]->reset();
+        // deck[thisDeck]->gateLenghtSize[instr] = 0;
+        // if (deck[!thisDeck]->deckPatterns[instr]->getValue() > 0)
+        // {
+        //   deck[thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
+        //   deck[thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
+        //   deck[thisDeck]->permanentMute[instr] = false;
+        //   deck[thisDeck]->gateLenghtSize[instr] = deck[!thisDeck]->gateLenghtSize[instr] = 0;
+        // }
+      }
+    }
+    //change decks
+    crossfader = 0;
+    thisDeck = !thisDeck;
+    deck[thisDeck]->cue(selectedMood,
+                        moodKitPatterns[selectedMood][0], //patterns
+                        moodKitPatterns[selectedMood][1], //
+                        moodKitPatterns[selectedMood][2], //
+                        moodKitPatterns[selectedMood][3], //
+                        moodKitPatterns[selectedMood][4], //
+                        moodKitPatterns[selectedMood][5]  //
+    );
     displayUpdateLineArea(1, moodKitName[previousMood]);
     displayUpdateLineArea(2, moodKitName[selectedMood]);
-    previousMood = selectedMood;
     displayShowCrossBar(-1);
-    crossfader = 0;
+    previousMood = selectedMood;
     updateDisplaySelectMood = false;
     updateDisplay = true;
   }
@@ -719,7 +753,7 @@ void loop()
     updateDisplayInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
-  else if ((updateDisplayChangePlayingSample != -1) && amIinsideSampleUpdateWindow())
+  else if ((updateDisplayChangePlayingSample != -1) && safetyZone())
   {
     displayUpdateLineArea(3, moodKitName[deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue()]);
     displayShowCornerInfo(1, deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue());
@@ -774,42 +808,84 @@ void loop()
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(1000); //block any other interface event
-    //before load new mood, prepare current deck to leave it the same way user customized
-    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
-    {
-      //if this instrument belongs to the other deck , merge 2 decks into one
-      if (crossfadedDeck(instr) == !thisDeck)
-      {
-        deck[thisDeck]->permanentMute[instr] = true;
-        // deck[thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
-        // deck[thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
-        // deck[thisDeck]->permanentMute[instr] = deck[!thisDeck]->permanentMute[instr];
-        // deck[thisDeck]->changeGateLenghSize(instr, deck[!thisDeck]->gateLenghtSize[instr]);
-      }
-    }
-    //change decks
-    thisDeck = !thisDeck;
-    deck[thisDeck]->cue(selectedMood - 1,                 //sample index
-                        moodKitPatterns[selectedMood][0], //patterns
-                        moodKitPatterns[selectedMood][1], //
-                        moodKitPatterns[selectedMood][2], //
-                        moodKitPatterns[selectedMood][3], //
-                        moodKitPatterns[selectedMood][4], //
-                        moodKitPatterns[selectedMood][5]  //
-    );
     updateDisplaySelectMood = true;
+
+    // interfaceEvent.debounce(1000);
+    // //before load new mood, kill unused samples and patterns
+    // for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    // {
+    //   //if instrument not crossfaded
+    //   if (!crossfadedDeck(instr))
+    //   // {
+    //   //   //use the old instrument - copy it from the other deck on this deck
+    //   //   deck[!thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
+    //   //   deck[!thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
+    //   //   deck[!thisDeck]->permanentMute[instr] = deck[!thisDeck]->permanentMute[instr];
+    //   //   deck[!thisDeck]->gateLenghtSize[instr] = deck[!thisDeck]->gateLenghtSize[instr];
+    //   // }
+    //   // else
+    //   {
+    //     if (deck[!thisDeck]->deckPatterns[instr]->getValue() > 1)
+    //     {
+    //       deck[thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
+    //       deck[thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
+    //       deck[thisDeck]->permanentMute[instr] = deck[!thisDeck]->permanentMute[instr];
+    //       deck[thisDeck]->gateLenghtSize[instr] = deck[!thisDeck]->gateLenghtSize[instr];
+    //     }
+    //     else
+    //     {
+    //       deck[thisDeck]->deckSamples[instr]->reset();
+    //       deck[thisDeck]->deckPatterns[instr]->reset();
+    //       deck[thisDeck]->permanentMute[instr] = 0;
+    //       deck[thisDeck]->gateLenghtSize[instr] = 0;
+    //     }
+    //   }
+    // }
+    //Serial.println("----------------------------------");
   }
 
   //read all action buttons (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXINSTRUMENTS; i++)
   {
     instrActionState[i] = !digitalRead(instrActionPins[i]); //read action instrument button
-    //if any tap should be rollbacked
-    //cross encoder + instrument modifier + action button + custom pattern
-    if ((laddderMenuOption == COMMANDUNDO)                 //
-        && instrActionState[i]                             //
-        && deck[thisDeck]->pattern->isThisCustomPattern(i) //
-        && interfaceEvent.debounced())
+
+    //if any instrument should be tapped - ladder menu + action button
+    if ((laddderMenuOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
+    {
+      //calculate if the tap will be saved on this step or into next
+      int8_t updateDisplayTapStep;
+      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
+      {
+        //DRAGGED STEP - tapped after trigger time
+        //updateDisplayTapStep = stepCount-1;
+        updateDisplayTapStep = ((stepCount - 1) < 0) ? (MAXSTEPS - 1) : (stepCount - 1);
+        //if this step is empty, play sound
+        if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep))
+        {
+          wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue() + 1); //send a wtrig async play
+        }
+      }
+      else
+      {
+        //RUSHED STEP - tapped before trigger time
+        //updateDisplayTapStep = ((stepCount) >= MAXSTEPS) ? 0 : (stepCount);
+        updateDisplayTapStep = stepCount;
+        //tap saved to next step
+        // int8_t nextStep = stepCount;
+        // nextStep++;
+        // if (nextStep >= MAXSTEPS)
+        //   nextStep = 0;
+        // updateDisplayTapStep = nextStep;
+        wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue() + 1); //send a wtrig async play
+        deck[thisDeck]->tappedStep[i] = true;
+      }
+      deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep);
+      updateDisplayTapInstrumentPattern = i;
+      interfaceEvent.debounce(250);
+    }
+
+    //if any tap should be rollbacked - ladder menu + action button
+    if ((laddderMenuOption == COMMANDUNDO) && instrActionState[i] && deck[thisDeck]->pattern->isThisCustomPattern(i) && interfaceEvent.debounced())
     {
       //if there was any rollback available
       if (deck[thisDeck]->pattern->undoAvailable(i))
@@ -820,65 +896,31 @@ void loop()
         updateDisplayRollbackInstrumentTap = i;
         interfaceEvent.debounce(200);
       }
-    }
 
-    //cross encoder + instrument modifier + action button + not custom pattern
-    //    else if (twoEncoderButtonsArePressed(CROSSENCODER, i + 2) && instrActionState[i] && interfaceEvent.debounced())
-    else if ((laddderMenuOption == COMMANDERASE) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      //erase pattern IF possible
-      deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
-      interfaceEvent.debounce(1000);
-      updateDisplayEraseInstrumentPattern = i;
-    }
-    //if any pattern should be permanently muted
-    //cross encoder + action button
-    else if ((laddderMenuOption == COMMANDSILENCE) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
-      interfaceEvent.debounce(1000);
-    }
-    //if any pattern should be tapped
-    //one instrument modifier + action button
-    else if ((laddderMenuOption == COMMANDTAP) && instrActionState[i] && interfaceEvent.debounced())
-    {
-      //calculate if the tap will be saved on this step or into next
-      int8_t updateDisplayTapStep;
-      if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
+      //if any pattern should be erased - ladder menu + action button
+      else if ((laddderMenuOption == COMMANDERASE) && instrActionState[i] && interfaceEvent.debounced())
       {
-        //DRAGGED STEP - tapped after trigger time
-        updateDisplayTapStep = stepCount;
-        //if this step is empty, play sound
-        if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep))
-        {
-          wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue()); //send a wtrig async play
-        }
+        //erase pattern IF possible
+        deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
+        interfaceEvent.debounce(1000);
+        updateDisplayEraseInstrumentPattern = i;
       }
-      else
+
+      //if any pattern should be permanently muted - ladder menu + action button
+      else if ((laddderMenuOption == COMMANDSILENCE) && instrActionState[i] && interfaceEvent.debounced())
       {
-        //RUSHED STEP - tapped before trigger time
-        updateDisplayTapStep = ((stepCount + 1) >= MAXSTEPS) ? 0 : (stepCount + 1);
-        //tap saved to next step
-        // int8_t nextStep = stepCount;
-        // nextStep++;
-        // if (nextStep >= MAXSTEPS)
-        //   nextStep = 0;
-        // updateDisplayTapStep = nextStep;
-        wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue()); //send a wtrig async play
-        deck[thisDeck]->tappedStep[i] = true;
+        deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
+        interfaceEvent.debounce(1000);
       }
-      deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep);
-      updateDisplayTapInstrumentPattern = i;
-      interfaceEvent.debounce(u_tickInterval / 1000);
     }
   }
-  //spaced readings to action ladder menu
-  //if (laddderMenuReadInterval.debounced())
-  //  {
-  //laddderMenuReadInterval.debounce();
-  ladderMenu.readSmoothed();
-  laddderMenuOption = ladderMenu.getSmoothedMenuIndex() + 1;
-  // }
+  //long time readings from action ladder menu
+  if (laddderMenuReadInterval.debounced())
+  {
+    laddderMenuReadInterval.debounce();
+    ladderMenu.readSmoothed();
+    laddderMenuOption = ladderMenu.getSmoothedMenuIndex() + 1;
+  }
 
   //if it is time to read one new melody parameter
   if (melodieUpdate.debounced())
@@ -912,4 +954,21 @@ void loop()
   //   Timer3.attachInterrupt(ISRfireTimer3);
   //   Timer3.start(u_bpm);
   // }
+}
+
+void printDeck(boolean _deck)
+{
+  Serial.println(_deck);
+  for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+  {
+    Serial.print(deck[_deck]->deckSamples[instr]->getValue());
+    Serial.print(",");
+    Serial.print(deck[_deck]->deckPatterns[instr]->getValue());
+    Serial.print(",");
+    Serial.print(deck[_deck]->permanentMute[instr]);
+    Serial.print(",");
+    Serial.print(deck[_deck]->gateLenghtSize[instr]);
+    Serial.println("");
+  }
+  Serial.println(".");
 }
