@@ -21,6 +21,10 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
+
+<li>11/05/2019<br>
+  Decided to add an analog distortion/fuzz fx to the main module. So , new prototype will be made.
+
 <li>11/02/2019<br>
   Yes !!! The Wavetrigger board works. So charming! <br>
   Goodbye rasberry pi and Pisound (great interface, but it wil be reserved to another project).<br>
