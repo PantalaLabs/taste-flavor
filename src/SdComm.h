@@ -8,29 +8,26 @@ Usage:
 
 #include <SdComm.h>
 SdComm *sdc;
-String moodKitName[5] = {"Carlos Pires-Drama"};
-uint16_t moodKitPatterns[5][6] = {{1, 1, 1, 1, 1, 1},};
 
-void setup()
+String moodKitName[5] = {"Test-teste"};
+uint16_t moodKitPatterns[5][6] = {{1, 1, 1, 1, 1, 1}};
+uint8_t originalMoodQtty = 1;
+..
+Serial.begin(9600);
+sdc = new SdComm(43, true);
+//sdc->createTestMoods();
+sdc->importAllMoods(moodKitName, moodKitPatterns, originalMoodQtty);
+uint16_t imp = sdc->getImportedMoods();
+for (uint8_t j = 0; j < (originalMoodQtty + imp); j++)
 {
-  uint16_t imp;
-  uint8_t originalMoodQtty=1;
-
-  Serial.begin(9600);
-  Serial.println("start");
-  sdc = new SdComm(43, true);
-  imp = sdc->importAllMoods(moodKitName, moodKitPatterns, originalMoodQtty);
-  for (uint8_t j = 0; j < (originalMoodQtty + imp); j++)
+  Serial.print(moodKitName[j]);
+  Serial.print(",");
+  for (uint8_t i = 0; i < 6; i++)
   {
-    Serial.print(moodKitName[j]);
+    Serial.print(moodKitPatterns[j][i]);
     Serial.print(",");
-    for (uint8_t i = 0; i < 6; i++)
-    {
-      Serial.print(moodKitPatterns[j][i]);
-      Serial.print(",");
-    }
-    Serial.println("");
   }
+  Serial.println("");
 }
 
 */
@@ -48,21 +45,22 @@ public:
   SdComm();
   SdComm(uint8_t _cspin);
   SdComm(uint8_t _cspin, boolean _dbg);
-  uint16_t _internalMood = 1;
-  uint16_t _importedMood = 0;
-  boolean createTestArray();
+  boolean createTestMoods();
   boolean dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
-  uint16_t importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t _intMoods);
+  void importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t moods);
+  uint16_t getImportedMoods();
 
 private:
   File myFile;
   boolean _debug;
   void init();
-  void debug(String _str);
   boolean deleteFile();
+  boolean openFileToWrite();
   boolean openFileToAppend();
   boolean openFileToRead();
   boolean closeFile();
+  uint16_t importedMoods;
+  void debug(String _str);
 };
 
 #endif

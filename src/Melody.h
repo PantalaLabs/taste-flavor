@@ -7,13 +7,15 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #ifndef Melody_h
 #define Melody_h
 
-#include "Arduino.h"
-#include "PantalaDefines.h"
-#include "Filter.h"
+#include "tf_Defines.h"
+#include <Arduino.h>
+#include <PantalaDefines.h>
+#include <Filter.h>
 
-#define MAXMELODYPARMS 6
-#define PARAMKEY 0      //key
-#define PARAMSPR 1      //spread
+
+#define MAXMELODYPARMS 6 //max ppotentiometer arameters
+#define PARAMSPR 0      //spread
+#define PARAMKEY 1      //key
 #define PARAMACC 2      //accent
 #define PARAMINH 3      //inheritance
 #define PARAMFIL 4      //filter
@@ -42,8 +44,8 @@ private:
   int16_t lastRead[MAXMELODYPARMS];
   int16_t parameters[MAXMELODYPARMS][4] = {
       //min , max, final wheighted , multiplier
-      {0, 11, 0, 1},   //"key",           //*
       {0, 11, 0, 1},   //"spread",     //*
+      {0, 11, 0, 1},   //"key",           //*
       {0, 6, 0, 1},    //"accents"         //**
       {1, 10, 50, 10}, //"inheritance",   //*
       {1, 15, 30, 4},  //"filter"         //**

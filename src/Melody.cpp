@@ -5,8 +5,10 @@ Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
+#include "tf_Defines.h"
 #include "Melody.h"
 #include "midi.h"
+#include <PantalaDefines.h>
 
 Melody::Melody(uint8_t maxsteps)
 {
@@ -20,8 +22,9 @@ Melody::Melody(uint8_t maxsteps)
 //PUBLIC----------------------------------------------------------------------------------------------
 uint16_t Melody::getNote()
 {
-  //_lastPlayedNote = applyFilter(finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + accent[stepCounter]);
-  _lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
+  //final melody + key + accent
+  _lastPlayedNote = applyFilter(finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + parameters[PARAMKEY][2] + accent[stepCounter]);
+  //_lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
   _lastPlayedNote = constrain(_lastPlayedNote, 0, 60);
 
   stepCounter++;
@@ -40,7 +43,7 @@ boolean Melody::updateParameters(uint8_t _param, uint16_t _val)
 {
   uint16_t read;
 
-  read = min(_val, MAXREADSCALE); //crop top value to MAXSCALE
+  read = min(_val, MAXREADSCALE); //crop value to MAXSCALE
   read = map(_val, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
   if (parameters[_param][2] != read)
   {
@@ -49,7 +52,7 @@ boolean Melody::updateParameters(uint8_t _param, uint16_t _val)
     parameters[_param][2] = read;
     if (_param == PARAMACC)
       calculateAccents();
-    else
+    else if (_param == PARAMSPR)
       computeNewMelody();
     return true;
   }
@@ -62,9 +65,9 @@ void Melody::computeNewMelody()
   for (uint8_t step = 0; step < _maxsteps; step++)
   {
     //key + spread
-    initialMelody[step] = baseNote + parameters[PARAMKEY][2] + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
+    initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
     //inheritance
-    if (random(99) > parameters[PARAMINH][2])
+    if (chance(parameters[PARAMINH][2], 100))
       finalMelody[step] = initialMelody[step];
   }
   //accents
@@ -96,8 +99,8 @@ uint8_t Melody::applyFilter(uint8_t _note)
 
 void Melody::calculateAccents()
 {
-  uint8_t MINCHANCE = 2;
-  uint8_t MAXCHANCE = 4;
+  uint8_t MINCHANCE = 1;
+  uint8_t MAXCHANCE = 3;
 
   for (uint8_t step = 0; step < _maxsteps; step++)
   {
@@ -107,41 +110,41 @@ void Melody::calculateAccents()
     case 0:
       break;
     case 1:
-      if (random(11) < MINCHANCE)
+      if (chance(MINCHANCE, 10))
         accent[step] = 12;
       break;
     case 2:
-      if (random(11) < MINCHANCE)
+      if (chance(MINCHANCE, 10))
         accent[step] = 24;
       break;
     case 3:
-      if (random(11) < MINCHANCE)
+      if (chance(MINCHANCE, 10))
       {
-        if (random(2))
+        if (oneChanceIn(2))
           accent[step] = 12;
         else
           accent[step] = 24;
       }
       break;
     case 4:
-      if (random(11) < MAXCHANCE)
+      if (chance(MAXCHANCE, 10))
         accent[step] = 12;
       break;
     case 5:
-      if (random(11) < MAXCHANCE)
+      if (chance(MAXCHANCE, 10))
         accent[step] = 24;
       break;
     case 6:
-      if (random(11) < MAXCHANCE)
+      if (chance(MAXCHANCE, 10))
       {
-        if (random(2))
+        if (oneChanceIn(2))
           accent[step] = 12;
         else
           accent[step] = 24;
       }
       break;
     }
-    if (random(2))
+    if (oneChanceIn(2))
       accent[step] = -accent[step];
   }
 }

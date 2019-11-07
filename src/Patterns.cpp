@@ -4,17 +4,18 @@
   under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
+#include "tf_Defines.h"
 #include "Patterns.h"
 
 Patterns::Patterns()
 {
   for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
-    for (uint8_t instr = 0; instr < MAXINSTRUMENTS; instr++)
+    for (uint8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
       undoStack[undos][instr] = -1;
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
-byte Patterns::isThisStepActive(uint8_t _instr, uint8_t _pat, uint8_t _step)
+uint8_t Patterns::isThisStepActive(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
   return steps[_instr][_pat][_step];
 }
@@ -29,7 +30,7 @@ void Patterns::eraseInstrumentPattern(uint8_t _instr, uint8_t _pat)
   //check if it is customizable
   customizeThisPattern(_instr, _pat);
   //clear actual pattern
-  for (int8_t step = 0; step < MAXSTEPS; step++)
+  for (int8_t step = 0; step < G_MAXSTEPS; step++)
     steps[_instr][_pat][step] = 0;
 }
 
@@ -47,13 +48,13 @@ void Patterns::customizeThisPattern(uint8_t _instr, uint8_t _pat)
 
 void Patterns::copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
 {
-  for (uint8_t step = 0; step < MAXSTEPS; step++)
+  for (uint8_t step = 0; step < G_MAXSTEPS; step++)
     steps[_instr][_target][step] = steps[_instr][_source][step];
 }
 
 void Patterns::resetAllCustomizedPatternsToOriginal()
 {
-  for (uint8_t pat = 0; pat < MAXINSTRUMENTS; pat++) // search for any BKPd pattern
+  for (uint8_t pat = 0; pat < G_MAXINSTRUMENTS; pat++) // search for any BKPd pattern
   {
     if (customizedPattern[pat] != 0) //if any pattern was customized , restore it from bkp before do anything
     {
@@ -63,12 +64,12 @@ void Patterns::resetAllCustomizedPatternsToOriginal()
   }
 }
 
-byte Patterns::getStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
+uint8_t Patterns::getStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
   return steps[_instr][_pat][_step];
 }
 
-void Patterns::setStep(uint8_t _instr, uint8_t _pat, uint8_t _step, byte _val)
+void Patterns::setStep(uint8_t _instr, uint8_t _pat, uint8_t _step, uint8_t _val)
 {
   steps[_instr][_pat][_step] = (_val == 1) ? 1 : 0;
 }
@@ -95,7 +96,7 @@ void Patterns::rollbackUndoStep(uint8_t _instr, uint8_t _pat)
 }
 
 //if there is any rollback available
-byte Patterns::undoAvailable(uint8_t _instr)
+uint8_t Patterns::undoAvailable(uint8_t _instr)
 {
   return (undoStack[0][_instr] != -1);
 }

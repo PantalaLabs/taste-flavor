@@ -36,17 +36,21 @@ void SdComm::init()
     debug("initialization failed!");
   else
     debug("initialization done!");
-  delay(100);
+  delay(500);
 }
 
 boolean SdComm::deleteFile()
 {
   if (!SD.remove("MOODS.TXT"))
   {
-    debug("remove failed!");
+    debug("delete failed!");
     return false;
   }
-  return true;
+  else
+  {
+    debug("deletet ok!");
+    return true;
+  }
 }
 
 boolean SdComm::openFileToRead()
@@ -64,6 +68,15 @@ boolean SdComm::openFileToAppend()
   if (myFile)
     return true;
   debug("open to append failed");
+  return false;
+}
+
+boolean SdComm::openFileToWrite()
+{
+  myFile = SD.open("MOODS.TXT", FILE_WRITE);
+  if (myFile)
+    return true;
+  debug("open to write failed");
   return false;
 }
 
@@ -100,13 +113,13 @@ boolean SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3,
   debug("dump mood end");
 }
 
-uint16_t SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t _intMoods)
+void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t moods)
 {
   if (openFileToRead())
   {
     debug("load data");
     char character;
-    uint16_t importedMood = 0;
+    importedMoods = 0;
     while (myFile.available())
     {
       for (uint8_t i = 0; i < 7; i++)
@@ -114,8 +127,7 @@ uint16_t SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][6
         //clear token
         String token = "";
         uint8_t strLen = 0;
-
-        //read one entire token
+        //read one full token
         character = myFile.read();
         while ((character != '\n') && (character != ',') && (myFile.available()))
         {
@@ -123,41 +135,33 @@ uint16_t SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][6
           token.concat(character);
           character = myFile.read();
         }
-        //if string or int
+        //if token is string or int
         if (i == 0)
         {
-          refKitName[_intMoods + importedMood] = token.substring(0, strLen);
+          refKitName[moods + importedMoods] = token.substring(0, strLen);
           Serial.print("-");
           Serial.println(token.c_str());
         }
         else if ((i >= 1) && (i <= 6))
         {
-          refKitPatterns[_intMoods + importedMood][i - 1] = token.toInt();
+          refKitPatterns[moods + importedMoods][i - 1] = token.toInt();
           Serial.print("int ");
           Serial.println(token.c_str());
         }
-        importedMood++;
       }
-      //end of reading one mood config
+      importedMoods++;
+      //read "crlf"
       character = myFile.read();
       character = myFile.read();
     }
     closeFile();
-    return importedMood;
   }
-  return 0;
 }
 
-boolean SdComm::createTestArray()
+boolean SdComm::createTestMoods()
 {
-  //  myFile = SD.open("MOODS.TXT", FILE_WRITE);
-  //O_READ | O_WRITE | O_CREAT | O_APPEND | FILE_WRITE
-  if (!deleteFile())
-  {
-    debug("delete failed");
-    return false;
-  }
-  if (!openFileToAppend())
+  deleteFile();
+  if (!openFileToWrite())
   {
     debug("open to append failed");
     return false;
@@ -175,6 +179,10 @@ boolean SdComm::createTestArray()
     return true;
   }
   return false;
+}
+uint16_t SdComm::getImportedMoods()
+{
+  return importedMoods;
 }
 
 void SdComm::debug(String _str)
