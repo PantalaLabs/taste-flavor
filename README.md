@@ -1,8 +1,9 @@
 ```
 Task manager:
-                                             PCB         CODE    PANEL
+                                             PCB         CODE     PANEL
 pattern reset clock in                        o           X         o
 clock select                                  o           x         o
+distortion sub module                         x           -         x
 
 - not applicable
 x scheduled
