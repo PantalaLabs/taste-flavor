@@ -3,7 +3,7 @@ Task manager:
                                              PCB         CODE     PANEL
 pattern reset clock in                        o           X         o
 clock select                                  o           x         o
-distortion sub module                         x           -         x
+distortion sub module                         o           -         o
 
 - not applicable
 x scheduled
@@ -21,6 +21,10 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
+
+<li>11/05/2019<br>
+  Yes ! full stereo analog distortion added.<br>
+  <img alt="" style="border-width:0" src="src/tasteflavor 0.993 painel.jpg" /></a><br>
 
 <li>11/05/2019<br>
   Decided to add an analog distortion/fuzz fx to the main module. So , new prototype will be made.
