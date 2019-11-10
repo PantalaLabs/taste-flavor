@@ -113,7 +113,7 @@ boolean SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3,
   debug("dump mood end");
 }
 
-void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t moods)
+void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], uint16_t moods)
 {
   if (openFileToRead())
   {

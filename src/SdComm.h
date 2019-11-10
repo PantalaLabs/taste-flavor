@@ -47,7 +47,7 @@ public:
   SdComm(uint8_t _cspin, boolean _dbg);
   boolean createTestMoods();
   boolean dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
-  void importAllMoods(String refKitName[], uint16_t refKitPatterns[][6], uint16_t moods);
+  void importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], uint16_t moods);
   uint16_t getImportedMoods();
 
 private:
