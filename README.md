@@ -29,14 +29,10 @@ UPDATES:
   Decided to add an analog distortion/fuzz fx to the main module. So , new prototype will be made.
 
 <li>11/02/2019<br>
-  Yes !!! The Wavetrigger board works. So charming! <br>
-  Goodbye rasberry pi and Pisound (great interface, but it wil be reserved to another project).<br>
-  Made the logical/phisical integration with current PCB.<br>
+  Yes !!! The new sound card works. So charming! <br>
+  Made the logical/phisical integration with new sound card.<br>
   Made new panel too. Both were sent to manufacturer. <br>
   I hope this will gonna be the the final prototype!<br>
-  
-  Testing 1..2..3<br>
-  <img alt="" style="border-width:0" src="0.jpg" /></a><br>
   
 
 <li>10/31/2019<br>
