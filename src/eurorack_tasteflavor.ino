@@ -224,6 +224,8 @@ uint16_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS + 1] = {
 int8_t crossfader = 0;
 int8_t lastCrossfadedValue = G_MAXINSTRUMENTS;
 
+#include "displayProcs.h"
+
 void setup()
 {
   analogWriteResolution(12);
@@ -315,10 +317,10 @@ void setup()
   delay(100);
 
   //setup display
+  // Address 0x3D for 128x64
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   {
 #ifdef DO_SERIAL
-    // Address 0x3D for 128x64
     Serial.begin(9600);
     Serial.println(F("SSD1306 allocation failed"));
     for (;;)
@@ -345,7 +347,7 @@ void setup()
     display.println(F("No WT communication"));
   wTrig.setReporting(false);
   display.display();
-  delay(2000);
+  delay(3000);
   displayWelcome();
   display.display();
 
@@ -386,12 +388,6 @@ void ISRfireTimer3()
     Timer4.start(u_tickInterval + u_LatencyComp);
   Timer3.start(bpm2micros4ppqn(bpm));
   interrupts();
-}
-
-//return if this instrument belongs to this or not to this deck
-boolean crossfadedDeck(uint8_t _instr)
-{
-  return (_instr < crossfader) ? thisDeck : !thisDeck;
 }
 
 //shifted clock and everything to step sequencer related
@@ -469,6 +465,12 @@ boolean safeZone()
   return (micros() < safeZoneEndTime);
 }
 
+//return if this instrument belongs to this or not to this deck
+boolean crossfadedDeck(uint8_t _instr)
+{
+  return (_instr < crossfader) ? thisDeck : !thisDeck;
+}
+
 //read queued encoder status
 void readRotaryEncoder(uint8_t _queued)
 {
@@ -540,100 +542,6 @@ void readRotaryEncoder(uint8_t _queued)
       }
     }
   }
-}
-
-//check if default display wasnt show yet
-void checkDefaultDisplay()
-{
-  if (defaultDisplayNotActiveYet)
-  {
-    defaultDisplayNotActiveYet = false;
-    display.clearDisplay();
-    display.drawRect(0, 0, 60, TEXTLINE_HEIGHT - 2, WHITE);
-    displayShowBrowsedMood();
-    displayShowCrossBar(-1);
-  }
-}
-
-void displayWelcome()
-{
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println(F("<-- select your mood"));
-  display.println(F("    and cross it -->"));
-}
-
-void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
-{
-  if (lastCrossBarGraphValue != _size)
-  {
-    display.fillRect(1, 1, 58, TEXTLINE_HEIGHT - 4, BLACK);
-    for (int8_t i = 0; i < _size; i++)
-      display.fillRect(10 * i, 0, 10, TEXTLINE_HEIGHT - 2, WHITE);
-    lastCrossBarGraphValue = _size;
-  }
-}
-
-void displayShowCornerInfo(uint8_t _parm, int16_t _val) //update display right upper corner with the actual sample or pattern number
-{
-  String rightCornerInfo[5] = {"pat", "smp", "bpm", "ms", "len"};
-  display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);
-  display.setCursor(70, 0);
-  display.print(rightCornerInfo[_parm]);
-  display.print(":");
-  switch (_parm)
-  {
-  case 0:
-  case 1:
-  case 2:
-  case 3:
-    display.print(_val);
-    break;
-  case 4:
-    display.print((G_DEFAULTGATELENGHT + (deck[crossfadedDeck(_val)]->gateLenghtSize[_val] * G_EXTENDEDGATELENGHT)) / 1000);
-  }
-}
-
-void displayEraseLineAndSetText(uint8_t _line)
-{
-  display.fillRect(0, _line * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
-  display.setCursor(0, _line * TEXTLINE_HEIGHT); //set cursor position
-}
-
-void displayUpdateLineArea(uint8_t _line, String _content)
-{
-  displayEraseLineAndSetText(_line);
-  display.print(_content); //print previous mood name
-}
-
-uint8_t lastBrowsedMood;
-void displayShowBrowsedMood() //update almost all bottom display area with the name of the selected mood and all 6 available instruments
-{
-  if (lastBrowsedMood != selectedMood)
-  {
-    lastBrowsedMood = selectedMood;
-    displayUpdateLineArea(3, moodKitName[selectedMood]);
-    for (uint8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++) //for each instrument
-      displayShowInstrPattern(instr, ROM);
-  }
-}
-
-void displayShowInstrPattern(uint8_t _instr, boolean _src)
-{
-  displayEraseInstrumentPattern(_instr);
-  for (int8_t step = 0; step < (G_MAXSTEPS - 1); step++) //for each step
-  {
-    //if browsed mood (ROM) or individual pattern browse (RAM)
-    if (((_src == ROM) && (pattern->getStep(_instr, moodKitData[selectedMood][_instr], step))) ||
-        ((_src == RAM) && (deck[thisDeck]->pattern->getStep(_instr, deck[thisDeck]->deckPatterns[_instr]->getValue(), step))))
-      display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
-  }
-}
-
-//erase exatctly one line pattern
-void displayEraseInstrumentPattern(uint8_t _instr)
-{
-  display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }
 
 //verify if NO ONE encoder button is pressed
@@ -879,7 +787,7 @@ void loop()
         updateDisplayEraseInstrumentPattern = i;
         break;
       case COMMANDSIL:
-        deck[thisDeck]->permanentMute[i] = deck[thisDeck]->permanentMute[i];
+        deck[thisDeck]->permanentMute[i] = !deck[thisDeck]->permanentMute[i];
         interfaceEvent.debounce(1000);
         break;
       }
