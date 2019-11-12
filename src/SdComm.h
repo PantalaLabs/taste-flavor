@@ -17,7 +17,7 @@ Serial.begin(9600);
 sdc = new SdComm(43, true);
 //sdc->createTestMoods();
 sdc->importAllMoods(moodKitName, moodKitPatterns, originalMoodQtty);
-uint16_t imp = sdc->getImportedMoods();
+uint16_t imp = sdc->getimportedRecords();
 for (uint8_t j = 0; j < (originalMoodQtty + imp); j++)
 {
   Serial.print(moodKitName[j]);
@@ -35,6 +35,7 @@ for (uint8_t j = 0; j < (originalMoodQtty + imp); j++)
 #ifndef SdComm_h
 #define SdComm_h
 
+#include "tf_defines.h"
 #include "Arduino.h"
 #include <SPI.h>
 #include <SD.h>
@@ -47,19 +48,20 @@ public:
   SdComm(uint8_t _cspin, boolean _dbg);
   boolean createTestMoods();
   boolean dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
-  void importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], uint16_t moods);
-  uint16_t getImportedMoods();
+  void importMoods(String refMoodName[], uint16_t refMoodData[][7], uint16_t startIndex);
+  void importInstrumentPatterns(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex);
+  uint16_t getimportedRecords();
 
 private:
   File myFile;
   boolean _debug;
   void init();
   boolean deleteFile();
-  boolean openFileToWrite();
-  boolean openFileToAppend();
-  boolean openFileToRead();
+  boolean openFileToWrite(String _fileName);
+  boolean openFileToAppend(String _fileName);
+  boolean openFileToRead(String _fileName);
   boolean closeFile();
-  uint16_t importedMoods;
+  uint16_t importedRecords;
   void debug(String _str);
 };
 

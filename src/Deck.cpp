@@ -7,17 +7,18 @@
 #include "tf_Defines.h"
 #include "Deck.h"
 
-Deck::Deck(uint16_t _maxMoods, uint16_t maxPat1, uint16_t maxPat2, uint16_t maxPat3, uint16_t maxPat4, uint16_t maxPat5, uint16_t maxPat6)
+Deck::Deck(uint16_t _maxMoods)
 {
+  pattern = new Patterns();
+  deckPatterns[0] = new Counter(pattern->totalInstrument1Patterns);
+  deckPatterns[1] = new Counter(pattern->totalInstrument2Patterns);
+  deckPatterns[2] = new Counter(pattern->totalInstrument3Patterns);
+  deckPatterns[3] = new Counter(pattern->totalInstrument4Patterns);
+  deckPatterns[4] = new Counter(pattern->totalInstrument5Patterns);
+  deckPatterns[5] = new Counter(pattern->totalInstrument6Patterns);
+
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     deckSamples[i] = new Counter((_maxMoods * G_MAXINSTRUMENTS) - 1);
-
-  deckPatterns[0] = new Counter(maxPat1);
-  deckPatterns[1] = new Counter(maxPat2);
-  deckPatterns[2] = new Counter(maxPat3);
-  deckPatterns[3] = new Counter(maxPat4);
-  deckPatterns[4] = new Counter(maxPat5);
-  deckPatterns[5] = new Counter(maxPat6);
 
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
@@ -27,7 +28,6 @@ Deck::Deck(uint16_t _maxMoods, uint16_t maxPat1, uint16_t maxPat2, uint16_t maxP
     deckSamples[i]->reset();
     deckPatterns[i]->reset();
   }
-  pattern = new Patterns();
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------

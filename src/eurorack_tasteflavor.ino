@@ -5,9 +5,6 @@ Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
-#define DO_SERIAL false
-#define DO_SD false
-
 #include "tf_Defines.h" //global taste and flavor defines
 
 #include <Arduino.h>
@@ -239,16 +236,16 @@ void setup()
 #endif
 
   //start decks and patterns
-  deck[0] = new Deck(G_INTERNALMOODS, G_MAXINSTR1PATTERNS, G_MAXINSTR2PATTERNS, G_MAXINSTR3PATTERNS, G_MAXINSTR4PATTERNS, G_MAXINSTR5PATTERNS, G_MAXINSTR6PATTERNS);
-  deck[1] = new Deck(G_INTERNALMOODS, G_MAXINSTR1PATTERNS, G_MAXINSTR2PATTERNS, G_MAXINSTR3PATTERNS, G_MAXINSTR4PATTERNS, G_MAXINSTR5PATTERNS, G_MAXINSTR6PATTERNS);
+  deck[0] = new Deck(G_INTERNALMOODS);
+  deck[1] = new Deck(G_INTERNALMOODS);
   pattern = new Patterns();
   melody = new Melody(G_MAXSTEPS);
 
 //import moods from SD card
 #ifdef DO_SD
   sdc = new SdComm(43, true);
-  sdc->importAllMoods(moodKitName, moodKitData, G_INTERNALMOODS);
-  importedMoodsFromSd = sdc->getImportedMoods();
+  sdc->importMoods(moodKitName, moodKitData, G_INTERNALMOODS);
+  importedMoodsFromSd = sdc->getimportedRecords();
   //update decks to recognize new moods
   deck[0]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
   deck[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
@@ -557,14 +554,11 @@ boolean noOneEncoderButtonIsPressed()
 //verify if ONLY ONE encoder button is pressed
 boolean onlyOneEncoderButtonIsPressed(uint8_t _target)
 {
-  if (encoderButtonState[_target]) //if asked button is pressed
-  {
-    for (uint8_t i = 0; i < MAXENCODERS; i++)      //search all encoder buttons
-      if ((i != _target) && encoderButtonState[i]) //encoder button is not the asked one and it is pressed , so there are 2 encoder buttons pressed
-        return false;
-  }
-  else //if not pressed , return false
+  if (!encoderButtonState[_target]) //if asked button is not pressed
     return false;
+  for (uint8_t i = 0; i < MAXENCODERS; i++)      //search all encoder buttons
+    if ((i != _target) && encoderButtonState[i]) //encoder button is not the asked one and it is pressed , so there are 2 encoder buttons pressed
+      return false;
   //if all tests where OK
   return true;
 }

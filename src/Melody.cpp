@@ -65,7 +65,9 @@ void Melody::computeNewMelody()
   for (uint8_t step = 0; step < _maxsteps; step++)
   {
     //key + spread
-    initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
+    //initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
+    initialMelody[step] = BASE10BITVOLTAGE + random(-parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE, parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE);
+    initialMelody[step] = map10bitAnalog2Scaled5octMidiNote(initialMelody[step], pentaTable);
     //inheritance
     if (chance(parameters[PARAMINH][2], 100))
       finalMelody[step] = initialMelody[step];

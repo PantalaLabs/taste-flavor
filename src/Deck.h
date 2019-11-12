@@ -16,7 +16,7 @@
 class Deck
 {
 public:
-  Deck(uint16_t _maxMoods, uint16_t maxPat1, uint16_t maxPat2, uint16_t maxPat3, uint16_t maxPat4, uint16_t maxPat5, uint16_t maxPat6);
+  Deck(uint16_t _maxMoods);
   int16_t id = -1;
   Counter *deckSamples[G_MAXINSTRUMENTS];
   Counter *deckPatterns[G_MAXINSTRUMENTS];

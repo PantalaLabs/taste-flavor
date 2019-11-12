@@ -5,6 +5,7 @@
   under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
+#include "tf_defines.h"
 #include "Arduino.h"
 #include "SdComm.h"
 #include "PantalaDefines.h"
@@ -53,27 +54,27 @@ boolean SdComm::deleteFile()
   }
 }
 
-boolean SdComm::openFileToRead()
+boolean SdComm::openFileToRead(String _fileName)
 {
-  myFile = SD.open("MOODS.TXT", O_READ);
+  myFile = SD.open(_fileName, O_READ);
   if (myFile)
     return true;
   debug("open to read failed");
   return false;
 }
 
-boolean SdComm::openFileToAppend()
+boolean SdComm::openFileToAppend(String _fileName)
 {
-  myFile = SD.open("MOODS.TXT", O_APPEND);
+  myFile = SD.open(_fileName, O_APPEND);
   if (myFile)
     return true;
   debug("open to append failed");
   return false;
 }
 
-boolean SdComm::openFileToWrite()
+boolean SdComm::openFileToWrite(String _fileName)
 {
-  myFile = SD.open("MOODS.TXT", FILE_WRITE);
+  myFile = SD.open(_fileName, FILE_WRITE);
   if (myFile)
     return true;
   debug("open to write failed");
@@ -113,13 +114,50 @@ boolean SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3,
   debug("dump mood end");
 }
 
-void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], uint16_t moods)
+void SdComm::importInstrumentPatterns(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex)
 {
-  if (openFileToRead())
+  String patternFile = "PATTERN";
+  patternFile += String(instr);
+  patternFile += ".TXT";
+  if (openFileToRead(patternFile))
+  {
+    debug("loading patterns from instrument");
+    char character;
+    importedRecords = 0;
+    while (myFile.available())
+    {
+      for (uint8_t i = 0; i < G_MAXSTEPS; i++)
+      {
+        //clear token
+        String token = "";
+        uint8_t strLen = 0;
+        //read one full token
+        character = myFile.read();
+        while ((character != '\n') && (character != ',') && (myFile.available()))
+        {
+          strLen++;
+          token.concat(character);
+          character = myFile.read();
+        }
+        refPatternTable[G_INTERNALINSTR1PATTERNS + importedRecords][i] = token.toInt();
+        Serial.println(token.c_str());
+      }
+      importedRecords++;
+      //read "crlf"
+      character = myFile.read();
+      character = myFile.read();
+    }
+    closeFile();
+  }
+}
+
+void SdComm::importMoods(String refMoodName[], uint16_t refMoodData[][7], uint16_t startIndex)
+{
+  if (openFileToRead("MOODS.TXT"))
   {
     debug("load data");
     char character;
-    importedMoods = 0;
+    importedRecords = 0;
     while (myFile.available())
     {
       for (uint8_t i = 0; i < 7; i++)
@@ -138,18 +176,18 @@ void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], u
         //if token is string or int
         if (i == 0)
         {
-          refKitName[moods + importedMoods] = token.substring(0, strLen);
+          refMoodName[startIndex + importedRecords] = token.substring(0, strLen);
           Serial.print("-");
           Serial.println(token.c_str());
         }
         else if ((i >= 1) && (i <= 6))
         {
-          refKitPatterns[moods + importedMoods][i - 1] = token.toInt();
+          refMoodData[startIndex + importedRecords][i - 1] = token.toInt();
           Serial.print("int ");
           Serial.println(token.c_str());
         }
       }
-      importedMoods++;
+      importedRecords++;
       //read "crlf"
       character = myFile.read();
       character = myFile.read();
@@ -161,7 +199,7 @@ void SdComm::importAllMoods(String refKitName[], uint16_t refKitPatterns[][7], u
 boolean SdComm::createTestMoods()
 {
   deleteFile();
-  if (!openFileToWrite())
+  if (!openFileToWrite(MOODFILE))
   {
     debug("open to append failed");
     return false;
@@ -180,9 +218,9 @@ boolean SdComm::createTestMoods()
   }
   return false;
 }
-uint16_t SdComm::getImportedMoods()
+uint16_t SdComm::getimportedRecords()
 {
-  return importedMoods;
+  return importedRecords;
 }
 
 void SdComm::debug(String _str)

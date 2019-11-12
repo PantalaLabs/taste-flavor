@@ -12,6 +12,10 @@
 #include <Counter.h>
 #include <PantalaDefines.h>
 
+#ifdef DO_SD
+#include "SdComm.h"
+#endif
+
 class Patterns
 {
 public:
@@ -30,19 +34,29 @@ public:
   void addUndoStep(uint8_t _instr, uint8_t _step);
   uint8_t undoAvailable(uint8_t _instr);
   void tapStep(uint8_t _instr, uint8_t _pat, uint8_t _step);
+  uint16_t totalInstrument1Patterns = G_INTERNALINSTR1PATTERNS;
+  uint16_t totalInstrument2Patterns = G_INTERNALINSTR2PATTERNS;
+  uint16_t totalInstrument3Patterns = G_INTERNALINSTR3PATTERNS;
+  uint16_t totalInstrument4Patterns = G_INTERNALINSTR4PATTERNS;
+  uint16_t totalInstrument5Patterns = G_INTERNALINSTR5PATTERNS;
+  uint16_t totalInstrument6Patterns = G_INTERNALINSTR6PATTERNS;
 
 private:
   int8_t undoStack[MAXUNDOS][G_MAXINSTRUMENTS];
 
+#ifdef DO_SD
+  SdComm *sdc;
+#endif
+
   //position [0] reserved to BKP pattern , position [1] reserved to "MUTE" pattern
-  uint8_t instr1[G_MAXINSTR1PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr1patterntable[G_INTERNALINSTR1PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
       {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0} //1000
   };
-  uint8_t instr2[G_MAXINSTR2PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr2patterntable[G_INTERNALINSTR2PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -52,7 +66,7 @@ private:
       {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}, //1000
       {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}  //1111
   };
-  uint8_t instr3[G_MAXINSTR3PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr3patterntable[G_INTERNALINSTR3PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -62,7 +76,7 @@ private:
       {1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0}, //10100010
       {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0}  //0010
   };
-  uint8_t instr4[G_MAXINSTR4PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr4patterntable[G_INTERNALINSTR4PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -72,7 +86,7 @@ private:
       {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0}, //0010
       {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}  //10
   };
-  uint8_t instr5[G_MAXINSTR5PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr5patterntable[G_INTERNALINSTR5PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -82,7 +96,7 @@ private:
       {1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0}, //10100010
       {0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0}  //0010010101010010
   };
-  uint8_t instr6[G_MAXINSTR6PATTERNS + 1][G_MAXSTEPS] = {
+  uint16_t instr6patterntable[G_INTERNALINSTR6PATTERNS + 1][G_MAXSTEPS] = {
       //, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _, |, _, _, _, _, _, _, _},
       //, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8},
       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, //..
@@ -95,12 +109,12 @@ private:
   //https://forum.arduino.cc/index.php?topic=642706.0
   //easy acessible by :
   //steps[instrument][pattern][step];
-  uint8_t (*steps[6])[G_MAXSTEPS] = {instr1, instr2, instr3, instr4, instr5, instr6};
+  uint16_t (*steps[6])[G_MAXSTEPS] = {instr1patterntable, instr2patterntable, instr3patterntable, instr4patterntable, instr5patterntable, instr6patterntable};
   //or
-  //uint8_t *steps[G_MAXINSTRUMENTS] = {&instr1[0][0], &instr2[0][0], &instr3[0][0], &instr4[0][0], &instr5[0][0], &instr6[0][0]};
+  //uint16_t *steps[G_MAXINSTRUMENTS] = {&instr1[0][0], &instr2[0][0], &instr3[0][0], &instr4[0][0], &instr5[0][0], &instr6[0][0]};
   //return steps[_instr][PatternsPatterns[_instr]->getValue() * G_MAXSTEPS + _step];
 
-  void copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target);
+  void copyRefPatternToRefPattern(uint16_t _instr, uint16_t _source, uint16_t _target);
   void init();
 };
 

@@ -9,6 +9,21 @@
 
 Patterns::Patterns()
 {
+//this code is inside the ifdef , because the class must run without SD CARD connected
+#ifdef DO_SD
+  sdc->importInstrumentPatterns(1, instr1patterntable, G_INTERNALINSTR1PATTERNS);
+  totalInstrument1Patterns = sdc->getimportedRecords();
+  sdc->importInstrumentPatterns(2, instr2patterntable, G_INTERNALINSTR2PATTERNS);
+  totalInstrument2Patterns = sdc->getimportedRecords();
+  sdc->importInstrumentPatterns(3, instr3patterntable, G_INTERNALINSTR3PATTERNS);
+  totalInstrument3Patterns = sdc->getimportedRecords();
+  sdc->importInstrumentPatterns(4, instr4patterntable, G_INTERNALINSTR4PATTERNS);
+  totalInstrument4Patterns = sdc->getimportedRecords();
+  sdc->importInstrumentPatterns(5, instr5patterntable, G_INTERNALINSTR5PATTERNS);
+  totalInstrument5Patterns = sdc->getimportedRecords();
+  sdc->importInstrumentPatterns(6, instr6patterntable, G_INTERNALINSTR6PATTERNS);
+  totalInstrument6Patterns = sdc->getimportedRecords();
+#endif
   for (uint8_t undos = 0; undos < MAXUNDOS; undos++)
     for (uint8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
       undoStack[undos][instr] = -1;
@@ -42,11 +57,11 @@ void Patterns::customizeThisPattern(uint8_t _instr, uint8_t _pat)
     copyRefPatternToRefPattern(_instr, _pat, BKPPATTERN); //bkp it to safe area
     customizedPattern[_instr] = _pat;                     //set asked pattern as BKPd
   }
-  //restore it to original state before make any other customization
+  //restore it to original state before make any other customization ??? 
   // copyRefPatternToRefPattern(_instr, BKPPATTERN, customizedPattern[_instr]);
 }
 
-void Patterns::copyRefPatternToRefPattern(uint8_t _instr, uint8_t _source, uint8_t _target)
+void Patterns::copyRefPatternToRefPattern(uint16_t _instr, uint16_t _source, uint16_t _target)
 {
   for (uint8_t step = 0; step < G_MAXSTEPS; step++)
     steps[_instr][_target][step] = steps[_instr][_source][step];
@@ -101,7 +116,7 @@ uint8_t Patterns::undoAvailable(uint8_t _instr)
   return (undoStack[0][_instr] != -1);
 }
 
-//tap a step 
+//tap a step
 void Patterns::tapStep(uint8_t _instr, uint8_t _pat, uint8_t _step)
 {
   customizeThisPattern(_instr, _pat); //prepare the new pattern

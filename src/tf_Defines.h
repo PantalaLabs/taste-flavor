@@ -1,21 +1,34 @@
 #ifndef tf_Defines_h
 #define tf_Defines_h
 
-#define G_MAXINSTRUMENTS 6                   //total of instruments
-#define G_MAXMEMORYMOODS 300                 //max array sizes
-#define G_INTERNALMOODS 5                    //internal moods
-#define G_MAXSTEPS 64                        //max step sequence
+#define DO_SERIAL false
+#define DO_SD false
+
+#define G_MAXINSTRUMENTS 6   //total of instruments
+#define G_MAXMEMORYMOODS 300 //max array sizes
+#define G_MAXSTEPS 64        //max step sequence
 #define G_MAXGATELENGHTS 8
 #define G_DEFAULTGATELENGHT 5000
 #define G_EXTENDEDGATELENGHT 40000
-#define G_MAXINSTR1PATTERNS 2 //only valid patterns + mute
-#define G_MAXINSTR2PATTERNS 5
-#define G_MAXINSTR3PATTERNS 5
-#define G_MAXINSTR4PATTERNS 5
-#define G_MAXINSTR5PATTERNS 5
-#define G_MAXINSTR6PATTERNS 4
+
+#define G_INTERNALMOODS 5    //internal moods
+
+#define G_INTERNALINSTR1PATTERNS 2 //only valid patterns + mute
+#define G_INTERNALINSTR2PATTERNS 5
+#define G_INTERNALINSTR3PATTERNS 5
+#define G_INTERNALINSTR4PATTERNS 5
+#define G_INTERNALINSTR5PATTERNS 5
+#define G_INTERNALINSTR6PATTERNS 4
+
 #define BKPPATTERN 0
 #define MAXUNDOS G_MAXSTEPS
 
-#endif
+#define MOODFILE "MOODS.TXT"
+#define INTRUMENT1PATTERNFILE "INSTR1.TXT"
+#define INTRUMENT2PATTERNFILE "INSTR2.TXT"
+#define INTRUMENT3PATTERNFILE "INSTR3.TXT"
+#define INTRUMENT4PATTERNFILE "INSTR4.TXT"
+#define INTRUMENT5PATTERNFILE "INSTR5.TXT"
+#define INTRUMENT6PATTERNFILE "INSTR6.TXT"
 
+#endif
