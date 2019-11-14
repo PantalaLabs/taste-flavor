@@ -114,7 +114,7 @@ boolean SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3,
   debug("dump mood end");
 }
 
-void SdComm::importInstrumentPatterns(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex)
+void SdComm::importInstrumentPattern(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex)
 {
   String patternFile = "PATTERN";
   patternFile += String(instr);

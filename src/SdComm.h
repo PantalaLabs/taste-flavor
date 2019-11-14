@@ -49,7 +49,7 @@ public:
   boolean createTestMoods();
   boolean dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
   void importMoods(String refMoodName[], uint16_t refMoodData[][7], uint16_t startIndex);
-  void importInstrumentPatterns(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex);
+  void importInstrumentPattern(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex);
   uint16_t getimportedRecords();
 
 private:

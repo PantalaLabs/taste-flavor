@@ -11,7 +11,7 @@
 #define G_DEFAULTGATELENGHT 5000
 #define G_EXTENDEDGATELENGHT 40000
 
-#define G_INTERNALMOODS 5    //internal moods
+#define G_INTERNALMOODS 5 //internal moods
 
 #define G_INTERNALINSTR1PATTERNS 2 //only valid patterns + mute
 #define G_INTERNALINSTR2PATTERNS 5

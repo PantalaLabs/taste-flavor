@@ -15,12 +15,11 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include <AnalogInput.h>
 
 //decks
-#include "Deck.h"
-#include "Deck.h"
-Deck *deck[2];
+#include "Mood.h"
+Mood *mood[2];
 boolean thisDeck = 0;
-#include "Patterns.h"
-Patterns *pattern;
+#include "Pattern.h"
+Pattern *originalPattern[G_MAXINSTRUMENTS];
 
 #include <wavTrigger.h>
 wavTrigger wTrig;
@@ -236,9 +235,15 @@ void setup()
 #endif
 
   //start decks and patterns
-  deck[0] = new Deck(G_INTERNALMOODS);
-  deck[1] = new Deck(G_INTERNALMOODS);
-  pattern = new Patterns();
+  mood[0] = new Mood(G_INTERNALMOODS);
+  mood[1] = new Mood(G_INTERNALMOODS);
+  originalPattern[0] = new Pattern(0, G_INTERNALINSTR1PATTERNS);
+  originalPattern[1] = new Pattern(1, G_INTERNALINSTR2PATTERNS);
+  originalPattern[2] = new Pattern(2, G_INTERNALINSTR3PATTERNS);
+  originalPattern[3] = new Pattern(3, G_INTERNALINSTR4PATTERNS);
+  originalPattern[4] = new Pattern(4, G_INTERNALINSTR5PATTERNS);
+  originalPattern[5] = new Pattern(5, G_INTERNALINSTR6PATTERNS);
+
   melody = new Melody(G_MAXSTEPS);
 
 //import moods from SD card
@@ -247,8 +252,8 @@ void setup()
   sdc->importMoods(moodKitName, moodKitData, G_INTERNALMOODS);
   importedMoodsFromSd = sdc->getimportedRecords();
   //update decks to recognize new moods
-  deck[0]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
-  deck[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
+  mood[0]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
+  mood[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
 #endif
 
   for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
@@ -398,24 +403,24 @@ void ISRfireTimer4()
     boolean targetDeck;
     targetDeck = crossfadedDeck(instr);
     //if this step wasnt permanently muted
-    if (!deck[targetDeck]->permanentMute[instr]
+    if (!mood[targetDeck]->patterns[instr]->permanentMute
         //and wasnt manually muted
         && !instrActionState[instr]
         // //and wasnt manually tapped
-        && !deck[targetDeck]->tappedStep[instr]
+        && !mood[targetDeck]->patterns[instr]->tappedStep
         //and this is an real pattern step
-        && deck[targetDeck]->pattern->isThisStepActive(instr, deck[targetDeck]->deckPatterns[instr]->getValue(), stepCount))
+        && mood[targetDeck]->patterns[instr]->isThisStepActive(mood[targetDeck]->patterns[instr]->id->getValue(), stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
-      //uint16_t sampleId = deck[targetDeck]->id ;
-      uint16_t sampleId = deck[targetDeck]->deckSamples[instr]->getValue();
+      //uint16_t sampleId = mood[targetDeck]->id ;
+      uint16_t sampleId = mood[targetDeck]->samples[instr]->getValue();
       // uint16_t moodVolume = sampleId / 6;
       // moodVolume = moodKitData[moodVolume][6];
       // wTrig.trackGain(sampleId, -moodVolume);
       wTrig.trackGain(sampleId, -6);
       wTrig.trackLoad(sampleId);
     }
-    deck[targetDeck]->tappedStep[instr] = false; //reset any tapped step
+    mood[targetDeck]->patterns[instr]->tappedStep = false; //reset any tapped step
   }
   wTrig.resumeAllInSync();
   interrupts();
@@ -438,7 +443,7 @@ void ISRendTriggers()
   //compare all triggers times
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
-    if (deck[crossfadedDeck(i)]->gateLenghtSize[i] <= gateLenghtCounter)
+    if (mood[crossfadedDeck(i)]->patterns[i]->gateLenghtSize <= gateLenghtCounter)
       digitalWrite(triggerPins[i], LOW);
   }
   //prepare to the next gate verification
@@ -517,24 +522,24 @@ void readRotaryEncoder(uint8_t _queued)
       if (laddderMenuOption == COMMANDSMP)
       {
         if (encoderChange == -1)
-          deck[thisDeck]->deckSamples[_instrum]->safeChange(-G_MAXINSTRUMENTS);
+          mood[thisDeck]->samples[_instrum]->safeChange(-G_MAXINSTRUMENTS);
         else
-          deck[thisDeck]->deckSamples[_instrum]->safeChange(G_MAXINSTRUMENTS);
+          mood[thisDeck]->samples[_instrum]->safeChange(G_MAXINSTRUMENTS);
         updateDisplayChangePlayingSample = _instrum;
       }
       //gate lenght change
       else if (laddderMenuOption == COMMANDTRL)
       {
-        deck[thisDeck]->changeGateLenghSize(_instrum, encoderChange);
+        mood[thisDeck]->patterns[_instrum]->changeGateLenghSize(encoderChange);
         updateDisplayUpdategateLenght = _instrum;
       }
       //pattern change
       else if (noOneEncoderButtonIsPressed())
       {
         if (encoderChange == -1)
-          deck[thisDeck]->deckPatterns[_instrum]->reward();
+          mood[thisDeck]->patterns[_instrum]->id->reward();
         else
-          deck[thisDeck]->deckPatterns[_instrum]->advance();
+          mood[thisDeck]->patterns[_instrum]->id->advance();
         updateDisplayInstrPattern = _instrum; //flags to update this instrument on display
       }
     }
@@ -627,17 +632,17 @@ void loop()
         //if this instrument was left behind on the other deck , save it on new
         if (crossfader <= lastCrossfadedValue)
         {
-          deck[thisDeck]->deckSamples[instr]->setValue(deck[!thisDeck]->deckSamples[instr]->getValue());
-          deck[thisDeck]->deckPatterns[instr]->setValue(deck[!thisDeck]->deckPatterns[instr]->getValue());
-          deck[thisDeck]->permanentMute[instr] = deck[!thisDeck]->permanentMute[instr];
-          deck[thisDeck]->gateLenghtSize[instr] = deck[!thisDeck]->gateLenghtSize[instr];
+          mood[thisDeck]->samples[instr]->setValue(mood[!thisDeck]->samples[instr]->getValue());
+          mood[thisDeck]->patterns[instr]->id->setValue(mood[!thisDeck]->patterns[instr]->id->getValue());
+          mood[thisDeck]->patterns[instr]->permanentMute = mood[!thisDeck]->patterns[instr]->permanentMute;
+          mood[thisDeck]->patterns[instr]->gateLenghtSize = mood[!thisDeck]->patterns[instr]->gateLenghtSize;
         }
         else //or discard
         {
-          deck[thisDeck]->deckSamples[instr]->reset();
-          deck[thisDeck]->deckPatterns[instr]->reset();
-          deck[thisDeck]->permanentMute[instr] = true;
-          deck[thisDeck]->gateLenghtSize[instr] = 0;
+          mood[thisDeck]->samples[instr]->reset();
+          mood[thisDeck]->patterns[instr]->id->reset();
+          mood[thisDeck]->patterns[instr]->permanentMute = true;
+          mood[thisDeck]->patterns[instr]->gateLenghtSize = 0;
         }
       }
       lastCrossfadedValue = crossfader;
@@ -645,7 +650,7 @@ void loop()
     //change decks
     crossfader = 0;
     thisDeck = !thisDeck;
-    deck[thisDeck]->cue(selectedMood,
+    mood[thisDeck]->cue(selectedMood,
                         moodKitData[selectedMood][0], //patterns
                         moodKitData[selectedMood][1], //
                         moodKitData[selectedMood][2], //
@@ -665,15 +670,15 @@ void loop()
   {
     displayShowInstrPattern(updateDisplayInstrPattern, RAM);
     displayUpdateLineArea(3, "Custom");
-    displayShowCornerInfo(0, deck[thisDeck]->deckPatterns[updateDisplayInstrPattern]->getValue());
+    displayShowCornerInfo(0, mood[thisDeck]->patterns[updateDisplayInstrPattern]->id->getValue());
     updateDisplay = true;
     updateDisplayInstrPattern = -1;
   }
   //if sampler changed and there is available time to update screen
   else if ((updateDisplayChangePlayingSample != -1) && safeZone())
   {
-    displayUpdateLineArea(3, moodKitName[deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue() / 6]);
-    displayShowCornerInfo(1, deck[thisDeck]->deckSamples[updateDisplayChangePlayingSample]->getValue());
+    displayUpdateLineArea(3, moodKitName[mood[thisDeck]->samples[updateDisplayChangePlayingSample]->getValue() / 6]);
+    displayShowCornerInfo(1, mood[thisDeck]->samples[updateDisplayChangePlayingSample]->getValue());
     updateDisplay = true;
     updateDisplayChangePlayingSample = -1;
   }
@@ -746,8 +751,8 @@ void loop()
           //updateDisplayTapStep = stepCount-1;
           updateDisplayTapStep = ((stepCount - 1) < 0) ? (G_MAXSTEPS - 1) : (stepCount - 1);
           //if this step is empty, play sound
-          if (!deck[thisDeck]->pattern->isThisStepActive(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep))
-            wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue() + 1); //send a wtrig async play
+          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
+            wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
         }
         else
         {
@@ -755,20 +760,20 @@ void loop()
           //updateDisplayTapStep = ((stepCount) >= G_MAXSTEPS) ? 0 : (stepCount);
           updateDisplayTapStep = stepCount;
           //tap saved to next step
-          wTrig.trackPlayPoly(deck[thisDeck]->deckSamples[i]->getValue() + 1); //send a wtrig async play
-          deck[thisDeck]->tappedStep[i] = true;
+          wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+          mood[thisDeck]->patterns[i]->tappedStep = true;
         }
-        deck[thisDeck]->pattern->tapStep(i, deck[thisDeck]->deckPatterns[i]->getValue(), updateDisplayTapStep);
+        mood[thisDeck]->patterns[i]->tapStep(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep);
         updateDisplayTapInstrumentPattern = i;
         interfaceEvent.debounce(250);
         break;
       case COMMANDUND:
         //if this pattern is a custom one and there was any rollback available
-        if ((deck[thisDeck]->pattern->isThisCustomPattern(i)) &&
-            (deck[thisDeck]->pattern->undoAvailable(i)))
+        if ((mood[thisDeck]->patterns[i]->customPattern) &&
+            (mood[thisDeck]->patterns[i]->undoAvailable()))
         {
-          deck[thisDeck]->pattern->rollbackUndoStep(i, deck[thisDeck]->deckPatterns[i]->getValue()); //rollback the last saved undo
-          displayShowInstrPattern(i, RAM);                                                           //update display with new inserted step
+          mood[thisDeck]->patterns[i]->rollbackUndoStep(mood[thisDeck]->patterns[i]->id->getValue()); //rollback the last saved undo
+          displayShowInstrPattern(i, RAM);                                                            //update display with new inserted step
           updateDisplay = true;
           updateDisplayRollbackInstrumentTap = i;
           interfaceEvent.debounce(200);
@@ -776,12 +781,12 @@ void loop()
         break;
       case COMMANDERS:
         //erase pattern IF possible
-        deck[thisDeck]->pattern->eraseInstrumentPattern(i, deck[thisDeck]->deckPatterns[i]->getValue());
+        mood[thisDeck]->patterns[i]->eraseInstrumentPattern(mood[thisDeck]->patterns[i]->id->getValue());
         interfaceEvent.debounce(1000);
         updateDisplayEraseInstrumentPattern = i;
         break;
       case COMMANDSIL:
-        deck[thisDeck]->permanentMute[i] = !deck[thisDeck]->permanentMute[i];
+        mood[thisDeck]->patterns[i]->permanentMute = !mood[thisDeck]->patterns[i]->permanentMute;
         interfaceEvent.debounce(1000);
         break;
       }
