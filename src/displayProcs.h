@@ -1,9 +1,9 @@
 void checkDefaultDisplay();
-void displayEraseInstrumentPattern(uint8_t _instr);
+void displayEraseInstrumentBlock(uint8_t _instr);
 void displayShowInstrPattern(uint8_t _instr, boolean _src);
 void displayShowBrowsedMood();
 void displayUpdateLineArea(uint8_t _line, String _content);
-void displayEraseLineAndSetText(uint8_t _line);
+void displayEraseLineBlockAndSetText(uint8_t _line);
 void displayShowCornerInfo(uint8_t _parm, int16_t _val);
 void displayShowCrossBar(int8_t _size);
 void displayWelcome();
@@ -61,7 +61,7 @@ void displayShowCornerInfo(uint8_t _parm, int16_t _val) //update display right u
   }
 }
 
-void displayEraseLineAndSetText(uint8_t _line)
+void displayEraseLineBlockAndSetText(uint8_t _line)
 {
   display.fillRect(0, _line * TEXTLINE_HEIGHT, DISPLAY_WIDTH, TEXTLINE_HEIGHT - 1, BLACK);
   display.setCursor(0, _line * TEXTLINE_HEIGHT); //set cursor position
@@ -69,7 +69,7 @@ void displayEraseLineAndSetText(uint8_t _line)
 
 void displayUpdateLineArea(uint8_t _line, String _content)
 {
-  displayEraseLineAndSetText(_line);
+  displayEraseLineBlockAndSetText(_line);
   display.print(_content); //print previous mood name
 }
 
@@ -87,18 +87,20 @@ void displayShowBrowsedMood() //update almost all bottom display area with the n
 
 void displayShowInstrPattern(uint8_t _instr, boolean _src)
 {
-  displayEraseInstrumentPattern(_instr);
+  displayEraseInstrumentBlock(_instr);
   for (int8_t step = 0; step < (G_MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
-    if (((_src == ROM) && (originalPattern[_instr]->getStep(moodKitData[selectedMood][_instr], step))) ||
+    // if (((_src == ROM) && (originalPattern[_instr]->getStep(moodKitData[selectedMood][_instr], step))) ||
+    //     ((_src == RAM) && (mood[thisDeck]->patterns[_instr]->getStep(mood[thisDeck]->patterns[_instr]->id->getValue(), step))))
+    if (((_src == ROM) && (mood[thisDeck]->patterns[_instr]->getStep(moodKitData[selectedMood][_instr], step, ROM))) ||
         ((_src == RAM) && (mood[thisDeck]->patterns[_instr]->getStep(mood[thisDeck]->patterns[_instr]->id->getValue(), step))))
       display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }
 
 //erase exatctly one line pattern
-void displayEraseInstrumentPattern(uint8_t _instr)
+void displayEraseInstrumentBlock(uint8_t _instr)
 {
   display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }

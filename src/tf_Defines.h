@@ -1,28 +1,25 @@
 #ifndef tf_Defines_h
 #define tf_Defines_h
 
-#define DO_SERIAL false
-#define DO_SD false
-
-#define G_MAXINSTRUMENTS 6   //total of instruments
-#define G_MAXMEMORYMOODS 300 //max array sizes
-#define G_MAXSTEPS 64        //max step sequence
-#define G_MAXGATELENGHTS 8
-#define G_DEFAULTGATELENGHT 5000
-#define G_EXTENDEDGATELENGHT 40000
-
-#define G_INTERNALMOODS 5 //internal moods
-
+#define DO_SERIAL false            //debugging mode
+#define DO_SD false                //do everything related to SD card
+#define DO_WT true                 //do everything related to WaveTrigger
+#define SD_CS 43                   //sd card chip selelect
+#define RAM 0                      //changeble patterns
+#define ROM 1                      //original reference patterns
+#define G_MAXINSTRUMENTS 6         //total of instruments
+#define G_MAXMEMORYMOODS 300       //max number of moods
+#define G_MAXSTEPS 64              //max step sequence
+#define G_MAXGATELENGHTS 8         //max number of different gatelenghts
+#define G_INTERNALMOODS 5          //internal moods
 #define G_INTERNALINSTR1PATTERNS 2 //only valid patterns + mute
 #define G_INTERNALINSTR2PATTERNS 5
 #define G_INTERNALINSTR3PATTERNS 5
 #define G_INTERNALINSTR4PATTERNS 5
 #define G_INTERNALINSTR5PATTERNS 5
 #define G_INTERNALINSTR6PATTERNS 4
-
-#define BKPPATTERN 0
-#define MAXUNDOS G_MAXSTEPS
-
+#define G_DEFAULTGATELENGHT 5000   //first gatelenght in ms
+#define G_EXTENDEDGATELENGHT 40000 //gate lenght size increment
 #define MOODFILE "MOODS.TXT"
 #define INTRUMENT1PATTERNFILE "INSTR1.TXT"
 #define INTRUMENT2PATTERNFILE "INSTR2.TXT"
@@ -30,5 +27,7 @@
 #define INTRUMENT4PATTERNFILE "INSTR4.TXT"
 #define INTRUMENT5PATTERNFILE "INSTR5.TXT"
 #define INTRUMENT6PATTERNFILE "INSTR6.TXT"
+
+#define I2C_ADDRESS 0x3D
 
 #endif

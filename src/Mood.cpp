@@ -20,15 +20,10 @@ Mood::Mood(uint16_t _maxMoods)
   patterns[5] = new Pattern(5, G_INTERNALINSTR6PATTERNS);
 
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    samples[i] = new Counter((_maxMoods * G_MAXINSTRUMENTS) - 1);
-
-  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
+    samples[i] = new Counter((_maxMoods * G_MAXINSTRUMENTS) - 1);
     samples[i]->setCyclable(false);
     samples[i]->reset();
-    patterns[i]->id->setInit(1);
-    patterns[i]->id->setCyclable(false);
-    patterns[i]->id->reset();
   }
 }
 

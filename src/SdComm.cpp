@@ -33,11 +33,11 @@ void SdComm::init()
 {
   debug("Initializing SD card...");
   randomSeed(analogRead(0));
-  if (!SD.begin(43))
+  if (!SD.begin(SD_CS))
     debug("initialization failed!");
   else
     debug("initialization done!");
-  delay(500);
+  delay(100);
 }
 
 boolean SdComm::deleteFile()

@@ -13,18 +13,18 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include <Rotary.h>
 #include <DueTimer.h>
 #include <AnalogInput.h>
+#include "Mood.h"
 
 //decks
-#include "Mood.h"
 Mood *mood[2];
 boolean thisDeck = 0;
-#include "Pattern.h"
-Pattern *originalPattern[G_MAXINSTRUMENTS];
 
+#if DO_WT == true
 #include <wavTrigger.h>
 wavTrigger wTrig;
+#endif
 
-#ifdef DO_SD
+#if DO_SD == true
 #include "SdComm.h"
 SdComm *sdc;
 #endif
@@ -163,15 +163,15 @@ uint8_t triggerPins[G_MAXINSTRUMENTS] = {TRIGOUTPIN1, TRIGOUTPIN2, TRIGOUTPIN3, 
 EventDebounce interfaceEvent(200); //min time in ms to accept another interface event
 EventDebounce melodieUpdate(70);   //min time in ms read new melody parameter
 
-Rotary MOODencoder(ENCPINAMOOD, ENCPINBMOOD);
-Rotary CROSSencoder(ENCPINACROSS, ENCPINBCROSS);
+Rotary moodEncoderPot(ENCPINAMOOD, ENCPINBMOOD);
+Rotary crossEncoderPot(ENCPINACROSS, ENCPINBCROSS);
 Rotary instr1encoder(ENCPINAINSTR1, ENCPINBINSTR1);
 Rotary instr2encoder(ENCPINAINSTR2, ENCPINBINSTR2);
 Rotary instr3encoder(ENCPINAINSTR3, ENCPINBINSTR3);
 Rotary instr4encoder(ENCPINAINSTR4, ENCPINBINSTR4);
 Rotary instr5encoder(ENCPINAINSTR5, ENCPINBINSTR5);
 Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
-Rotary *encoders[MAXENCODERS] = {&MOODencoder, &CROSSencoder, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
+Rotary *encoders[MAXENCODERS] = {&moodEncoderPot, &crossEncoderPot, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
 int16_t selectedMood = 0;                     //actual selected mood
 int16_t lastSelectedMood = 255;               //prevents to execute 2 times the same action
@@ -199,24 +199,22 @@ int8_t queuedRotaryEncoder = 0;
 
 //mood
 uint16_t importedMoodsFromSd = 0;
-String moodKitName[G_MAXMEMORYMOODS] = {
-    "",
+char *moodKitName[G_MAXMEMORYMOODS] = {
+    "-",
     "P.Labs-Empty Room",
     "P.Labs-Choke",
     "P.Labs-April23",
     "Carlos Pires-Drama"};
 //{pattern id, pattern id, pattern id, pattern id, pattern id, pattern id, absolute volume reduction}
-uint16_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS + 1] = {
-    {1, 1, 1, 1, 1, 1, 9}, //reserved MUTE = 1
-    {2, 2, 2, 2, 2, 2, 9}, //P.Labs-Empty Room
-    {2, 3, 3, 4, 3, 1, 9}, //P.Labs-Choke
-    {2, 3, 4, 2, 3, 1, 7}, //P.Labs-April23
-    {2, 5, 5, 2, 5, 4, 20} //Carlos Pires-Drama
+uint32_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
+    {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
+    {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
+    {2, 3, 3, 4, 3, 1}, //P.Labs-Choke
+    {2, 3, 4, 2, 3, 1}, //P.Labs-April23
+    {2, 5, 5, 2, 5, 4}  //Carlos Pires-Drama
 };
 
 //decks
-#define RAM 0
-#define ROM 1
 int8_t crossfader = 0;
 int8_t lastCrossfadedValue = G_MAXINSTRUMENTS;
 
@@ -224,31 +222,24 @@ int8_t lastCrossfadedValue = G_MAXINSTRUMENTS;
 
 void setup()
 {
-  analogWriteResolution(12);
-  analogReadResolution(10);
-  pinMode(DAC0, OUTPUT);
-  ladderMenu.setMenu(laddderMenuSeparators, MAXPARAMETERS + 1);
-
-#ifdef DO_SERIAL
+#if DO_SERIAL == true
   Serial.begin(9600);
   Serial.println("Debugging..");
 #endif
 
-  //start decks and patterns
+  analogWriteResolution(12);
+  analogReadResolution(10);
+  pinMode(DAC0, OUTPUT);
+
+  //start decks and melody
   mood[0] = new Mood(G_INTERNALMOODS);
   mood[1] = new Mood(G_INTERNALMOODS);
-  originalPattern[0] = new Pattern(0, G_INTERNALINSTR1PATTERNS);
-  originalPattern[1] = new Pattern(1, G_INTERNALINSTR2PATTERNS);
-  originalPattern[2] = new Pattern(2, G_INTERNALINSTR3PATTERNS);
-  originalPattern[3] = new Pattern(3, G_INTERNALINSTR4PATTERNS);
-  originalPattern[4] = new Pattern(4, G_INTERNALINSTR5PATTERNS);
-  originalPattern[5] = new Pattern(5, G_INTERNALINSTR6PATTERNS);
-
   melody = new Melody(G_MAXSTEPS);
+  ladderMenu.setMenu(laddderMenuSeparators, MAXPARAMETERS + 1);
 
-//import moods from SD card
-#ifdef DO_SD
-  sdc = new SdComm(43, true);
+  //import moods from SD card
+#if DO_SD == true
+  sdc = new SdComm(SD_CS, true);
   sdc->importMoods(moodKitName, moodKitData, G_INTERNALMOODS);
   importedMoodsFromSd = sdc->getimportedRecords();
   //update decks to recognize new moods
@@ -256,11 +247,12 @@ void setup()
   mood[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
 #endif
 
+  delay(100);
   for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
     paramFilter[i] = new Filter(6);
-
   // pinMode(TRIGGERINPIN, INPUT);
   // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToExternal, RISING);
+  delay(100);
 
   //start all encoders
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -308,21 +300,22 @@ void setup()
     delay(5000);
   }
 
+#if DO_WT == true
   // WAV Trigger startup at 57600
   delay(1000);
   wTrig.start();
-  delay(10);
+  delay(50);
   wTrig.stopAllTracks();
   wTrig.masterGain(-9);
   wTrig.samplerateOffset(0);
   wTrig.setReporting(true);
   delay(100);
+#endif
 
-  //setup display
-  // Address 0x3D for 128x64
+  //setup display Address 0x3D for 128x64
   if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
   {
-#ifdef DO_SERIAL
+#if DO_SERIAL == true
     Serial.begin(9600);
     Serial.println(F("SSD1306 allocation failed"));
     for (;;)
@@ -338,6 +331,7 @@ void setup()
   display.println(F("Taste & Flavor"));
   display.println(F(""));
 
+#if DO_WT == true
   char gWTrigVersion[21];
   if (wTrig.getVersion(gWTrigVersion, VERSION_STRING_LEN))
   {
@@ -348,6 +342,7 @@ void setup()
   else
     display.println(F("No WT communication"));
   wTrig.setReporting(false);
+#endif
   display.display();
   delay(3000);
   displayWelcome();
@@ -412,17 +407,17 @@ void ISRfireTimer4()
         && mood[targetDeck]->patterns[instr]->isThisStepActive(mood[targetDeck]->patterns[instr]->id->getValue(), stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
-      //uint16_t sampleId = mood[targetDeck]->id ;
       uint16_t sampleId = mood[targetDeck]->samples[instr]->getValue();
-      // uint16_t moodVolume = sampleId / 6;
-      // moodVolume = moodKitData[moodVolume][6];
-      // wTrig.trackGain(sampleId, -moodVolume);
+#if DO_WT == true
       wTrig.trackGain(sampleId, -6);
       wTrig.trackLoad(sampleId);
+#endif
     }
     mood[targetDeck]->patterns[instr]->tappedStep = false; //reset any tapped step
   }
+#if DO_WT == true
   wTrig.resumeAllInSync();
+#endif
   interrupts();
   analogWrite(DAC0, melody->getNote());
   gateLenghtCounter = 0;
@@ -699,7 +694,7 @@ void loop()
   //if erase pattern
   else if (updateDisplayEraseInstrumentPattern != -1)
   {
-    displayEraseInstrumentPattern(updateDisplayEraseInstrumentPattern); //clear pattern from display
+    displayEraseInstrumentBlock(updateDisplayEraseInstrumentPattern); //clear pattern from display
     updateDisplay = true;
     updateDisplayEraseInstrumentPattern = -1;
   }
@@ -750,9 +745,11 @@ void loop()
           //DRAGGED STEP - tapped after trigger time
           //updateDisplayTapStep = stepCount-1;
           updateDisplayTapStep = ((stepCount - 1) < 0) ? (G_MAXSTEPS - 1) : (stepCount - 1);
-          //if this step is empty, play sound
+//if this step is empty, play sound
+#if DO_WT == true
           if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
             wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+#endif
         }
         else
         {
@@ -760,7 +757,9 @@ void loop()
           //updateDisplayTapStep = ((stepCount) >= G_MAXSTEPS) ? 0 : (stepCount);
           updateDisplayTapStep = stepCount;
           //tap saved to next step
+#if DO_WT == true
           wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+#endif
           mood[thisDeck]->patterns[i]->tappedStep = true;
         }
         mood[thisDeck]->patterns[i]->tapStep(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep);
