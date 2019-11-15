@@ -28,27 +28,27 @@ Pattern::Pattern(uint8_t _instr, uint8_t _maxPatterns)
   {
   case 0:
     totalPatterns = G_INTERNALINSTR1PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr1patterntable, G_INTERNALINSTR1PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr1patterntable, G_INTERNALINSTR1PATTERNS);
     break;
   case 1:
     totalPatterns = G_INTERNALINSTR2PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr2patterntable, G_INTERNALINSTR2PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr2patterntable, G_INTERNALINSTR2PATTERNS);
     break;
   case 2:
     totalPatterns = G_INTERNALINSTR3PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr3patterntable, G_INTERNALINSTR3PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr3patterntable, G_INTERNALINSTR3PATTERNS);
     break;
   case 3:
     totalPatterns = G_INTERNALINSTR4PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr4patterntable, G_INTERNALINSTR4PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr4patterntable, G_INTERNALINSTR4PATTERNS);
     break;
   case 4:
     totalPatterns = G_INTERNALINSTR5PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr5patterntable, G_INTERNALINSTR5PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr5patterntable, G_INTERNALINSTR5PATTERNS);
     break;
   case 5:
     totalPatterns = G_INTERNALINSTR6PATTERNS;
-    sdc->importInstrumentPattern(instrumentIdentifyer+1, instr6patterntable, G_INTERNALINSTR6PATTERNS);
+    sdc->importInstrumentPattern(instrumentIdentifyer + 1, instr6patterntable, G_INTERNALINSTR6PATTERNS);
     break;
   }
   totalPatterns += sdc->getimportedRecords();
@@ -58,7 +58,7 @@ Pattern::Pattern(uint8_t _instr, uint8_t _maxPatterns)
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
-//return _step from the actual pattern 
+//return _step from the actual pattern
 boolean Pattern::getStep(uint8_t _step)
 {
   return steps[instrumentIdentifyer][id->getValue()][_step];
@@ -158,8 +158,13 @@ uint8_t Pattern::undoAvailable()
 void Pattern::tapStep(uint8_t _step)
 {
   customizeThisPattern(); //prepare the new pattern
-  setStep(_step, 1);    //insert new step into Pattern
-  addUndoStep(_step);         //insert new step into undo stack
+  setStep(_step, 1);      //insert new step into Pattern
+  addUndoStep(_step);     //insert new step into undo stack
+}
+
+boolean Pattern::playThisStep(uint8_t _step)
+{
+  return (!permanentMute && !tappedStep && getStep(_step));
 }
 
 //PRIVATE----------------------------------------------------------------------------------------------

@@ -42,6 +42,7 @@ public:
   void rollbackUndoStep();
   void addUndoStep(uint8_t _step);
   void tapStep(uint8_t _step);
+  boolean playThisStep(uint8_t _step);
 
 private:
   uint8_t bkpPattern = 0;

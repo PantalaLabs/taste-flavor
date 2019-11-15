@@ -62,6 +62,14 @@ void Mood::reset()
   }
 }
 
+void Mood::discardNotXfadedInstrument(uint8_t _instr)
+{
+  samples[_instr]->reset();
+  patterns[_instr]->id->reset();
+  patterns[_instr]->permanentMute = true;
+  patterns[_instr]->gateLenghtSize = 0;
+}
+
 void Mood::resetAllCustomPatternsToOriginal()
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)

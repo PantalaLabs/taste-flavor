@@ -27,7 +27,7 @@ public:
   void cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6);
   void changeMaxMoods(uint16_t _max);
   void reset();
-
+  void discardNotXfadedInstrument(uint8_t _instr);
 private:
 
 };

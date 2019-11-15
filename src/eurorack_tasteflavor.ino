@@ -195,7 +195,7 @@ int8_t queuedRotaryEncoder = 0;
 //mood
 uint16_t importedMoodsFromSd = 0;
 char *moodKitName[G_MAXMEMORYMOODS] = {
-    "-",
+    "Empty",
     "P.Labs-Empty Room",
     "P.Labs-Choke",
     "P.Labs-April23",
@@ -249,13 +249,12 @@ void setup()
   // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToExternal, RISING);
   delay(100);
 
-  //start all encoders
+  //start all encoders and it´s buttons
   for (uint8_t i = 0; i < MAXENCODERS; i++)
+  {
     encoders[i]->begin();
-
-  //start all encoders buttons
-  for (uint8_t i = 0; i < MAXENCODERS; i++)
     pinMode(encoderButtonPins[i], INPUT_PULLUP);
+  }
 
   //start all Action buttons
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
@@ -268,7 +267,7 @@ void setup()
     digitalWrite(triggerPins[i], LOW);
   }
 
-  //start trigger out
+  //trigger out TEST
   pinMode(TRIGOUTPATTERNPIN1, OUTPUT);
   digitalWrite(TRIGOUTPATTERNPIN1, HIGH);
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
@@ -392,21 +391,13 @@ void ISRfireTimer4()
   {
     boolean targetDeck;
     targetDeck = crossfadedDeck(instr);
-    //if this step wasnt permanently muted
-    if (!mood[targetDeck]->patterns[instr]->permanentMute
-        //and wasnt manually muted
-        && !instrActionState[instr]
-        // //and wasnt manually tapped
-        && !mood[targetDeck]->patterns[instr]->tappedStep
-        //and this is an real pattern step
-        && mood[targetDeck]->patterns[instr]->getStep(stepCount))
-//        && mood[targetDeck]->patterns[instr]->isThisStepActive(mood[targetDeck]->patterns[instr]->id->getValue(), stepCount))
+    //step all ready to play and it wasnt manually muted
+    if (mood[targetDeck]->patterns[instr]->playThisStep(stepCount) && !instrActionState[instr])
     {
       digitalWrite(triggerPins[instr], HIGH);
-      uint16_t sampleId = mood[targetDeck]->samples[instr]->getValue();
 #if DO_WT == true
-      wTrig.trackGain(sampleId, -6);
-      wTrig.trackLoad(sampleId);
+      wTrig.trackGain(mood[targetDeck]->samples[instr]->getValue(), -6);
+      wTrig.trackLoad(mood[targetDeck]->samples[instr]->getValue());
 #endif
     }
     mood[targetDeck]->patterns[instr]->tappedStep = false; //reset any tapped step
@@ -465,14 +456,18 @@ boolean crossfadedDeck(uint8_t _instr)
 }
 
 //read queued encoder status
-void readRotaryEncoder(uint8_t _queued)
+void processRotaryEncoder()
 {
-  unsigned char result = encoders[_queued]->process();
+  queuedRotaryEncoder++;
+  if (queuedRotaryEncoder == MAXENCODERS)
+    queuedRotaryEncoder = 0;
+
+  unsigned char result = encoders[queuedRotaryEncoder]->process();
   if ((result == 16) || (result == 32))
   {
     int8_t encoderChange;
     encoderChange = (result == 16) ? 1 : -1;
-    if (_queued == MOODENCODER)
+    if (queuedRotaryEncoder == MOODENCODER)
     {
       selectedMood += encoderChange;
       selectedMood = constrain(selectedMood, 0, G_INTERNALMOODS - 1);
@@ -482,7 +477,7 @@ void readRotaryEncoder(uint8_t _queued)
         lastSelectedMood = selectedMood;
       }
     }
-    else if (_queued == CROSSENCODER)
+    else if (queuedRotaryEncoder == CROSSENCODER)
     {
       //if cross button AND cross button are pressed and cross rotate change timer shift
       if (laddderMenuOption == COMMANDLAT)
@@ -508,7 +503,7 @@ void readRotaryEncoder(uint8_t _queued)
     else
     {
       //all other instrument encoders
-      uint8_t _instrum = _queued - 2; //discard mood and morph indexes
+      uint8_t _instrum = queuedRotaryEncoder - 2; //discard mood and morph indexes
       //sample change
       if (laddderMenuOption == COMMANDSMP)
       {
@@ -576,16 +571,12 @@ boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 
 void loop()
 {
-  //flags if any display update will be necessary in this cycle
-  boolean updateDisplay = false;
-
   //read queued encoders
-  queuedRotaryEncoder++;
-  if (queuedRotaryEncoder == MAXENCODERS)
-    queuedRotaryEncoder = 0;
-  readRotaryEncoder(queuedRotaryEncoder);
+  processRotaryEncoder();
 
   //ASYNC updates ==============================================================
+  //flags if any display update will be necessary in this cycle
+  boolean updateDisplay = false;
   //mood browse
   if (updateDisplayBrowseMood)
   {
@@ -630,10 +621,11 @@ void loop()
         }
         else //or discard
         {
-          mood[thisDeck]->samples[instr]->reset();
-          mood[thisDeck]->patterns[instr]->id->reset();
-          mood[thisDeck]->patterns[instr]->permanentMute = true;
-          mood[thisDeck]->patterns[instr]->gateLenghtSize = 0;
+          mood[thisDeck]->discardNotXfadedInstrument(instr);
+          // mood[thisDeck]->samples[instr]->reset();
+          // mood[thisDeck]->patterns[instr]->id->reset();
+          // mood[thisDeck]->patterns[instr]->permanentMute = true;
+          // mood[thisDeck]->patterns[instr]->gateLenghtSize = 0;
         }
       }
       lastCrossfadedValue = crossfader;
@@ -743,7 +735,7 @@ void loop()
           updateDisplayTapStep = ((stepCount - 1) < 0) ? (G_MAXSTEPS - 1) : (stepCount - 1);
 //if this step is empty, play sound
 #if DO_WT == true
-//          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
+          //          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
           if (!mood[thisDeck]->patterns[i]->getStep(updateDisplayTapStep))
             wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
 #endif
@@ -769,7 +761,7 @@ void loop()
             (mood[thisDeck]->patterns[i]->undoAvailable()))
         {
           mood[thisDeck]->patterns[i]->rollbackUndoStep(); //rollback the last saved undo
-          displayShowInstrPattern(i, RAM);                                                            //update display with new inserted step
+          displayShowInstrPattern(i, RAM);                 //update display with new inserted step
           updateDisplay = true;
           updateDisplayRollbackInstrumentTap = i;
           interfaceEvent.debounce(200);
