@@ -399,7 +399,8 @@ void ISRfireTimer4()
         // //and wasnt manually tapped
         && !mood[targetDeck]->patterns[instr]->tappedStep
         //and this is an real pattern step
-        && mood[targetDeck]->patterns[instr]->isThisStepActive(mood[targetDeck]->patterns[instr]->id->getValue(), stepCount))
+        && mood[targetDeck]->patterns[instr]->getStep(stepCount))
+//        && mood[targetDeck]->patterns[instr]->isThisStepActive(mood[targetDeck]->patterns[instr]->id->getValue(), stepCount))
     {
       digitalWrite(triggerPins[instr], HIGH);
       uint16_t sampleId = mood[targetDeck]->samples[instr]->getValue();
@@ -742,7 +743,8 @@ void loop()
           updateDisplayTapStep = ((stepCount - 1) < 0) ? (G_MAXSTEPS - 1) : (stepCount - 1);
 //if this step is empty, play sound
 #if DO_WT == true
-          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
+//          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
+          if (!mood[thisDeck]->patterns[i]->getStep(updateDisplayTapStep))
             wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
 #endif
         }
@@ -757,7 +759,7 @@ void loop()
 #endif
           mood[thisDeck]->patterns[i]->tappedStep = true;
         }
-        mood[thisDeck]->patterns[i]->tapStep(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep);
+        mood[thisDeck]->patterns[i]->tapStep(updateDisplayTapStep);
         updateDisplayTapInstrumentPattern = i;
         interfaceEvent.debounce(250);
         break;
@@ -766,7 +768,7 @@ void loop()
         if ((mood[thisDeck]->patterns[i]->customPattern) &&
             (mood[thisDeck]->patterns[i]->undoAvailable()))
         {
-          mood[thisDeck]->patterns[i]->rollbackUndoStep(mood[thisDeck]->patterns[i]->id->getValue()); //rollback the last saved undo
+          mood[thisDeck]->patterns[i]->rollbackUndoStep(); //rollback the last saved undo
           displayShowInstrPattern(i, RAM);                                                            //update display with new inserted step
           updateDisplay = true;
           updateDisplayRollbackInstrumentTap = i;
@@ -775,7 +777,7 @@ void loop()
         break;
       case COMMANDERS:
         //erase pattern IF possible
-        mood[thisDeck]->patterns[i]->eraseInstrumentPattern(mood[thisDeck]->patterns[i]->id->getValue());
+        mood[thisDeck]->patterns[i]->eraseInstrumentPattern();
         interfaceEvent.debounce(1000);
         updateDisplayEraseInstrumentPattern = i;
         break;

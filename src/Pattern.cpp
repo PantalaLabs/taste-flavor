@@ -58,9 +58,31 @@ Pattern::Pattern(uint8_t _instr, uint8_t _maxPatterns)
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
-uint8_t Pattern::isThisStepActive(uint8_t _pat, uint8_t _step)
+//return _step from the actual pattern 
+boolean Pattern::getStep(uint8_t _step)
+{
+  return steps[instrumentIdentifyer][id->getValue()][_step];
+}
+
+boolean Pattern::getStep(uint8_t _pat, uint8_t _step)
 {
   return steps[instrumentIdentifyer][_pat][_step];
+}
+
+boolean Pattern::getStep(uint8_t _pat, uint8_t _step, boolean _src)
+{
+  //if search for the original pattern and this pattern was already customized , return the step on the BKP area
+  return (steps[instrumentIdentifyer][bkpPattern][_step]) || (steps[instrumentIdentifyer][_pat][_step]);
+}
+
+// boolean Pattern::isThisStepActive(uint8_t _pat, uint8_t _step)
+// {
+//   return steps[instrumentIdentifyer][_pat][_step];
+// }
+
+void Pattern::setStep(uint8_t _step, uint8_t _val)
+{
+  steps[instrumentIdentifyer][id->getValue()][_step] = (_val == 1) ? 1 : 0;
 }
 
 void Pattern::changeGateLenghSize(int8_t _change)
@@ -69,22 +91,22 @@ void Pattern::changeGateLenghSize(int8_t _change)
   gateLenghtSize = constrain(gateLenghtSize, 0, G_MAXGATELENGHTS);
 }
 
-void Pattern::eraseInstrumentPattern(uint8_t _pat)
+void Pattern::eraseInstrumentPattern()
 {
   //check if it is customizable
-  customizeThisPattern(_pat);
+  customizeThisPattern();
   //clear actual pattern
   for (int8_t step = 0; step < G_MAXSTEPS; step++)
-    steps[instrumentIdentifyer][_pat][step] = 0;
+    steps[instrumentIdentifyer][id->getValue()][step] = 0;
 }
 
-void Pattern::customizeThisPattern(uint8_t _pat)
+void Pattern::customizeThisPattern()
 {
   //if this pattern isn´t customized
   if (customPattern == 0)
   {
-    copyRefPatternToRefPattern(_pat, bkpPattern); //bkp it to safe area
-    customPattern = _pat;                         //set asked pattern as BKPd
+    copyRefPatternToRefPattern(id->getValue(), bkpPattern); //bkp it to safe area
+    customPattern = id->getValue();                         //set asked pattern as BKPd
   }
   //restore it to original state before make any other customization ???
   // copyRefPatternToRefPattern(_instr, bkpPattern, customizedPattern[_instr]);
@@ -105,22 +127,6 @@ void Pattern::resetCustomPatternToOriginal()
   }
 }
 
-boolean Pattern::getStep(uint8_t _pat, uint8_t _step)
-{
-  return steps[instrumentIdentifyer][_pat][_step];
-}
-
-boolean Pattern::getStep(uint8_t _pat, uint8_t _step, boolean _src)
-{
-  //if search for the original pattern and this pattern was already customized , return the step on the BKP area
-  return (steps[instrumentIdentifyer][bkpPattern][_step]) || (steps[instrumentIdentifyer][_pat][_step]);
-}
-
-void Pattern::setStep(uint8_t _pat, uint8_t _step, uint8_t _val)
-{
-  steps[instrumentIdentifyer][_pat][_step] = (_val == 1) ? 1 : 0;
-}
-
 void Pattern::clearUndoArray()
 {
   for (uint8_t i = 0; i < maxUndos; i++)
@@ -134,9 +140,9 @@ void Pattern::addUndoStep(uint8_t _step)
   undoStack[0] = _step;
 }
 
-void Pattern::rollbackUndoStep(uint8_t _pat)
+void Pattern::rollbackUndoStep()
 {
-  setStep(_pat, undoStack[0], 0); //remove tapped step
+  setStep(undoStack[0], 0); //remove tapped step
   for (uint8_t i = 0; i < (maxUndos - 1); i++)
     undoStack[i] = undoStack[i + 1]; //move all values ahead to open space on stack
   undoStack[(maxUndos - 1)] = -1;
@@ -149,10 +155,10 @@ uint8_t Pattern::undoAvailable()
 }
 
 //tap a step
-void Pattern::tapStep(uint8_t _pat, uint8_t _step)
+void Pattern::tapStep(uint8_t _step)
 {
-  customizeThisPattern(_pat); //prepare the new pattern
-  setStep(_pat, _step, 1);    //insert new step into Pattern
+  customizeThisPattern(); //prepare the new pattern
+  setStep(_step, 1);    //insert new step into Pattern
   addUndoStep(_step);         //insert new step into undo stack
 }
 

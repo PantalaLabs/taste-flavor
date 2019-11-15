@@ -12,7 +12,7 @@
 #include <Counter.h>
 #include <PantalaDefines.h>
 
-#ifdef DO_SD== true
+#ifdef DO_SD == true
 #include "SdComm.h"
 #endif
 
@@ -27,32 +27,32 @@ public:
   uint8_t gateLenghtSize = 0;
   boolean permanentMute = 0;
   boolean tappedStep = 0;
-
-  uint8_t isThisStepActive(uint8_t _pat, uint8_t _step);
+  
   void resetCustomPatternToOriginal();
   void changeGateLenghSize(int8_t _change);
-  void eraseInstrumentPattern(uint8_t _pat);
-  void customizeThisPattern(uint8_t _pat);
+  void eraseInstrumentPattern();
+  void customizeThisPattern();
+  boolean getStep(uint8_t _step);
   boolean getStep(uint8_t _pat, uint8_t _step);
   boolean getStep(uint8_t _pat, uint8_t _step, boolean _src);
-  void setStep(uint8_t _pat, uint8_t _step, uint8_t _val);
+  void setStep(uint8_t _step, uint8_t _val);
   void copystepTostep(uint8_t _source, uint8_t _target);
-  void clearUndoArray();
-  void rollbackUndoStep(uint8_t _pat);
-  void addUndoStep(uint8_t _step);
   uint8_t undoAvailable();
-  void tapStep(uint8_t _pat, uint8_t _step);
+  void clearUndoArray();
+  void rollbackUndoStep();
+  void addUndoStep(uint8_t _step);
+  void tapStep(uint8_t _step);
 
 private:
   uint8_t bkpPattern = 0;
   void copyRefPatternToRefPattern(uint16_t _source, uint16_t _target);
   void init();
-  uint8_t maxUndos= G_MAXSTEPS;
+  uint8_t maxUndos = G_MAXSTEPS;
   int8_t undoStack[G_MAXSTEPS];
   int8_t instrumentIdentifyer; //to link this Class to an instrument identifyer (1 to 6)
   uint16_t totalPatterns;
 
-#ifdef DO_SD== true
+#ifdef DO_SD == true
   SdComm *sdc;
 #endif
 
