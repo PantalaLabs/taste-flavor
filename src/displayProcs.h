@@ -1,3 +1,6 @@
+#define DOTGRIDINIT 36
+#define GRIDPATTERNHEIGHT 4
+
 void checkDefaultDisplay();
 void displayEraseInstrumentBlock(uint8_t _instr);
 void displayShowInstrPattern(uint8_t _instr, boolean _src);

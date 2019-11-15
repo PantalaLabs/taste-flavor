@@ -27,7 +27,10 @@
 #define INTRUMENT4PATTERNFILE "INSTR4.TXT"
 #define INTRUMENT5PATTERNFILE "INSTR5.TXT"
 #define INTRUMENT6PATTERNFILE "INSTR6.TXT"
-
-#define I2C_ADDRESS 0x3D
+#define I2C_ADDRESS 0x3C
+#define DISPLAY_WIDTH 128 // display width, in pixels
+#define DISPLAY_HEIGHT 64 // display height, in pixels
+#define TEXTLINE_HEIGHT 9 // text line height, in pixels
+//#define I2C_ADDRESS 0x3D
 
 #endif

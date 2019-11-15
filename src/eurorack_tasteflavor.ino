@@ -30,13 +30,7 @@ SdComm *sdc;
 #endif
 
 //display
-#define I2C_ADDRESS 0x3C
-#define DISPLAY_WIDTH 128       // display width, in pixels
-#define DISPLAY_HEIGHT 64       // display height, in pixels
-#define TEXTLINE_HEIGHT 9       // text line height, in pixels
 #define DISPLAYUPDATETIME 35000 //microsseconds to update display
-#define DOTGRIDINIT 36
-#define GRIDPATTERNHEIGHT 4
 
 //adafruit
 #include <Adafruit_SSD1306.h>
@@ -46,9 +40,6 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 //CV sequencer
 #include "Melody.h"
 Melody *melody;
-#define MAXENCODERS 8  //total of encoders
-#define MOODENCODER 0  //MOOD encoder id
-#define CROSSENCODER 1 //CROSS encoder id
 uint8_t queuedMelodyParameter;
 Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 
@@ -78,6 +69,10 @@ boolean parameterActivity;
 #define SCLPIN 21
 
 //encoders
+#define MAXENCODERS 8  //total of encoders
+#define MOODENCODER 0  //MOOD encoder id
+#define CROSSENCODER 1 //CROSS encoder id
+
 #define ENCPINAMOOD 13
 #define ENCPINBMOOD 12
 #define ENCBUTPINMOOD 11
