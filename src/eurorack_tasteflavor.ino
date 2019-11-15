@@ -622,10 +622,6 @@ void loop()
         else //or discard
         {
           mood[thisDeck]->discardNotXfadedInstrument(instr);
-          // mood[thisDeck]->samples[instr]->reset();
-          // mood[thisDeck]->patterns[instr]->id->reset();
-          // mood[thisDeck]->patterns[instr]->permanentMute = true;
-          // mood[thisDeck]->patterns[instr]->gateLenghtSize = 0;
         }
       }
       lastCrossfadedValue = crossfader;
