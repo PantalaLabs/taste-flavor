@@ -32,5 +32,13 @@
 #define DISPLAY_HEIGHT 64 // display height, in pixels
 #define TEXTLINE_HEIGHT 9 // text line height, in pixels
 //#define I2C_ADDRESS 0x3D
+#define MAXMELODYPARMS 7 //max ppotentiometer arameters
+#define G_MELODYPARAMPIN0 0
+#define G_MELODYPARAMPIN1 1
+#define G_MELODYPARAMPIN2 2
+#define G_MELODYPARAMPIN3 3
+#define G_MELODYPARAMPIN4 4
+#define G_MELODYPARAMPIN5 5
+#define G_MELODYPARAMPIN6 6
 
 #endif

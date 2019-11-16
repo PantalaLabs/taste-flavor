@@ -9,11 +9,15 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include "Melody.h"
 #include "midi.h"
 #include <PantalaDefines.h>
+#include <Counter.h>
 
 Melody::Melody(uint8_t maxsteps)
 {
   _maxsteps = maxsteps;
   stepCounter = 0;
+  queuedParameter = new Counter(MAXMELODYPARMS - 1);
+  for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
+    filters[i] = new Filter(6);
   randomSeed(micros());
   computeNewMelody();
   computeAccents();
@@ -43,12 +47,15 @@ void Melody::resetStepCounter()
   stepCounter = 0;
 }
 
-boolean Melody::updateParameters(uint8_t _param, uint16_t _val)
+boolean Melody::readNewMelodyParameter()
 {
+  uint8_t _param = queuedParameter->advance();
   uint16_t read;
-
-  read = min(_val, MAXREADSCALE); //crop value to MAXSCALE
-  read = map(_val, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
+  read = analogRead(potentiometerPins[_param]);
+  read = filters[_param]->add(read);
+  read = read >> 4;
+  read = min(read, MAXREADSCALE); //crop value to MAXSCALE
+  read = map(read, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
   if (parameters[_param][2] != read)
   {
     // if (_param == PARAMSIZ)

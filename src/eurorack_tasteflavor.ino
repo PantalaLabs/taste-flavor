@@ -40,8 +40,6 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 //CV sequencer
 #include "Melody.h"
 Melody *melody;
-uint8_t queuedMelodyParameter;
-Filter *paramFilter[MAXMELODYPARMS]; //add filter for each param pot
 
 //ladder menu
 #define MAXPARAMETERS 8
@@ -242,12 +240,8 @@ void setup()
   mood[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
 #endif
 
-  delay(100);
-  for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
-    paramFilter[i] = new Filter(6);
   // pinMode(TRIGGERINPIN, INPUT);
   // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToExternal, RISING);
-  delay(100);
 
   //start all encoders and it´s buttons
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -787,20 +781,12 @@ void loop()
   if (melodieUpdate.debounced())
   {
     melodieUpdate.debounce();
-    int16_t read;
-    //add 8bit resolution parameter to a filter
-    read = paramFilter[queuedMelodyParameter]->add(analogRead(queuedMelodyParameter) >> 4);
-    boolean newUpdates;
-    newUpdates = melody->updateParameters(queuedMelodyParameter, read);
-    if (newUpdates)
+    if (melody->readNewMelodyParameter())
     {
       digitalWrite(TRIGOUTPATTERNPIN1, HIGH);
       info.debounce();
       parameterActivity = true;
     }
-    queuedMelodyParameter++;
-    if (queuedMelodyParameter >= MAXMELODYPARMS - 1)
-      queuedMelodyParameter = 0;
   }
   if (parameterActivity && info.debounced())
   {

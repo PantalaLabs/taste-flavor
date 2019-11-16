@@ -11,27 +11,30 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include <Arduino.h>
 #include <PantalaDefines.h>
 #include <Filter.h>
+#include <Counter.h>
 
-#define MAXMELODYPARMS 7 //max ppotentiometer arameters
-#define PARAMSPR 0       //spread
-#define PARAMKEY 1       //key
-#define PARAMACC 2       //accent
-#define PARAMINH 3       //inheritance
-#define PARAMFIL 4       //filter
-#define PARAMSIZ 5       //size
-#define PARAMSUB 6       //sub melody
-#define MAXREADSCALE 48  //
+#define PARAMSPR 0      //spread
+#define PARAMKEY 1      //key
+#define PARAMACC 2      //accent
+#define PARAMINH 3      //inheritance
+#define PARAMFIL 4      //filter
+#define PARAMSIZ 5      //size
+#define PARAMSUB 6      //sub melody
+#define MAXREADSCALE 48 //
 
 class Melody
 {
 public:
   Melody(uint8_t maxsteps);
-  boolean updateParameters(uint8_t _param, uint16_t _val);
+  boolean readNewMelodyParameter();
   uint16_t getNote();
   void resetStepCounter();
   void computeNewMelody();
 
 private:
+  int8_t potentiometerPins[MAXMELODYPARMS] = {G_MELODYPARAMPIN0, G_MELODYPARAMPIN1, G_MELODYPARAMPIN2, G_MELODYPARAMPIN3, G_MELODYPARAMPIN4, G_MELODYPARAMPIN5, G_MELODYPARAMPIN6};
+  Counter *queuedParameter;
+  Filter *filters[MAXMELODYPARMS]; //add filter for each param pot
   void computeAccents();
   void computeSubMelody();
   int8_t applyFilter(int8_t _note);
@@ -43,16 +46,15 @@ private:
   int16_t finalMelody[64];
   int16_t subMelody[64];
   int16_t accent[64];
-  int16_t lastRead[MAXMELODYPARMS];
   int16_t parameters[MAXMELODYPARMS][4] = {
       //min , max, final wheighted , multiplier
-      {0, 11, 0, 1},   //"spread",     //*
-      {0, 11, 0, 1},   //"key",           //*
-      {0, 6, 0, 1},    //"accents"         //**
-      {1, 10, 50, 10}, //"inheritance",   //*
-      {1, 15, 30, 4},  //"filter"         //**
-      {0, 4, 2, 1},    //"size",          //**
-      {0, 6, 5, 1}     //"sub melody",          //**
+      {0, 11, 0, 1},   //spread
+      {0, 11, 0, 1},   //key
+      {0, 6, 0, 1},    //accents
+      {1, 10, 50, 10}, //inheritance
+      {1, 15, 30, 4},  //filter
+      {0, 4, 2, 1},    //size
+      {0, 6, 5, 1}     //sub melody
   };
   uint8_t _maxsteps;
   uint8_t _lastPlayedNote;
