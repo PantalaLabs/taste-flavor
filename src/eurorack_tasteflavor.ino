@@ -608,10 +608,12 @@ void loop()
         //if this instrument was left behind on the other deck , save it on new
         if (crossfader <= lastCrossfadedValue)
         {
-          mood[thisDeck]->samples[instr]->setValue(mood[!thisDeck]->samples[instr]->getValue());
-          mood[thisDeck]->patterns[instr]->id->setValue(mood[!thisDeck]->patterns[instr]->id->getValue());
-          mood[thisDeck]->patterns[instr]->permanentMute = mood[!thisDeck]->patterns[instr]->permanentMute;
-          mood[thisDeck]->patterns[instr]->gateLenghtSize = mood[!thisDeck]->patterns[instr]->gateLenghtSize;
+          mood[thisDeck]->cueXfadedInstrument(
+              instr,
+              mood[!thisDeck]->samples[instr]->getValue(),
+              mood[!thisDeck]->patterns[instr]->id->getValue(),
+              mood[!thisDeck]->patterns[instr]->permanentMute,
+              mood[!thisDeck]->patterns[instr]->gateLenghtSize);
         }
         else //or discard
         {
@@ -620,7 +622,7 @@ void loop()
       }
       lastCrossfadedValue = crossfader;
     }
-    //change decks
+    //switch decks
     crossfader = 0;
     thisDeck = !thisDeck;
     mood[thisDeck]->cue(selectedMood,
@@ -672,21 +674,24 @@ void loop()
   //if erase pattern
   else if (updateDisplayEraseInstrumentPattern != -1)
   {
-    displayEraseInstrumentBlock(updateDisplayEraseInstrumentPattern); //clear pattern from display
+    //clear pattern from display
+    displayEraseInstrumentPattern(updateDisplayEraseInstrumentPattern);
     updateDisplay = true;
     updateDisplayEraseInstrumentPattern = -1;
   }
   //if step was tapped
   else if (updateDisplayTapInstrumentPattern != -1)
   {
-    displayShowInstrPattern(updateDisplayTapInstrumentPattern, RAM); //update display with new inserted step
+    //update display with new inserted step
+    displayShowInstrPattern(updateDisplayTapInstrumentPattern, RAM);
     updateDisplay = true;
     updateDisplayTapInstrumentPattern = -1;
   }
   //rolback tap
   else if (updateDisplayRollbackInstrumentTap != -1)
   {
-    displayShowInstrPattern(updateDisplayRollbackInstrumentTap, RAM); //update display with removed step
+    //update display with removed step
+    displayShowInstrPattern(updateDisplayRollbackInstrumentTap, RAM);
     updateDisplay = true;
     updateDisplayRollbackInstrumentTap = -1;
   }
@@ -727,7 +732,9 @@ void loop()
 #if DO_WT == true
           //          if (!mood[thisDeck]->patterns[i]->isThisStepActive(mood[thisDeck]->patterns[i]->id->getValue(), updateDisplayTapStep))
           if (!mood[thisDeck]->patterns[i]->getStep(updateDisplayTapStep))
+          {
             wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+          }
 #endif
         }
         else
@@ -747,11 +754,9 @@ void loop()
         break;
       case COMMANDUND:
         //if this pattern is a custom one and there was any rollback available
-        if ((mood[thisDeck]->patterns[i]->customPattern) &&
-            (mood[thisDeck]->patterns[i]->undoAvailable()))
+        if (mood[thisDeck]->patterns[i]->undoLastTappedStep())
         {
-          mood[thisDeck]->patterns[i]->rollbackUndoStep(); //rollback the last saved undo
-          displayShowInstrPattern(i, RAM);                 //update display with new inserted step
+          displayShowInstrPattern(i, RAM); //update display with new inserted step
           updateDisplay = true;
           updateDisplayRollbackInstrumentTap = i;
           interfaceEvent.debounce(200);

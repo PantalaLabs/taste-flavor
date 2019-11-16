@@ -37,6 +37,7 @@ public:
   boolean getStep(uint8_t _pat, uint8_t _step, boolean _src);
   void setStep(uint8_t _step, uint8_t _val);
   void copystepTostep(uint8_t _source, uint8_t _target);
+  boolean undoLastTappedStep();
   uint8_t undoAvailable();
   void clearUndoArray();
   void rollbackUndoStep();

@@ -2,7 +2,7 @@
 #define GRIDPATTERNHEIGHT 4
 
 void checkDefaultDisplay();
-void displayEraseInstrumentBlock(uint8_t _instr);
+void displayEraseInstrumentPattern(uint8_t _instr);
 void displayShowInstrPattern(uint8_t _instr, boolean _src);
 void displayShowBrowsedMood();
 void displayUpdateLineArea(uint8_t _line, String _content);
@@ -90,7 +90,7 @@ void displayShowBrowsedMood() //update almost all bottom display area with the n
 
 void displayShowInstrPattern(uint8_t _instr, boolean _src)
 {
-  displayEraseInstrumentBlock(_instr);
+  displayEraseInstrumentPattern(_instr);
   for (int8_t step = 0; step < (G_MAXSTEPS - 1); step++) //for each step
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
@@ -103,7 +103,7 @@ void displayShowInstrPattern(uint8_t _instr, boolean _src)
 }
 
 //erase exatctly one line pattern
-void displayEraseInstrumentBlock(uint8_t _instr)
+void displayEraseInstrumentPattern(uint8_t _instr)
 {
   display.fillRect(0, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), DISPLAY_WIDTH, GRIDPATTERNHEIGHT - 1, BLACK);
 }

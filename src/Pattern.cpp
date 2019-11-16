@@ -162,9 +162,21 @@ void Pattern::tapStep(uint8_t _step)
   addUndoStep(_step);     //insert new step into undo stack
 }
 
+//if this step isnt muted , neither tapped and a triggered 1 step
 boolean Pattern::playThisStep(uint8_t _step)
 {
   return (!permanentMute && !tappedStep && getStep(_step));
+}
+
+//if this pattern is custom and there is an undo available
+boolean Pattern::undoLastTappedStep()
+{
+  if (customPattern && undoAvailable())
+  {
+    rollbackUndoStep();
+    return true;
+  }
+  return false;
 }
 
 //PRIVATE----------------------------------------------------------------------------------------------

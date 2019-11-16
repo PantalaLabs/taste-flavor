@@ -34,7 +34,6 @@ void Mood::cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, u
   id->setValue(moodId);
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     samples[i]->setValue((moodId * G_MAXINSTRUMENTS) + i);
-
   patterns[0]->id->setValue(p1);
   patterns[1]->id->setValue(p2);
   patterns[2]->id->setValue(p3);
@@ -42,6 +41,15 @@ void Mood::cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, u
   patterns[4]->id->setValue(p5);
   patterns[5]->id->setValue(p6);
 }
+
+void Mood::cueXfadedInstrument(uint16_t _instr,uint16_t  _newSampleId,uint16_t  _newPatternId,boolean _newMute, uint8_t _newLenght)
+{
+  samples[_instr]->setValue(_newSampleId);
+  patterns[_instr]->id->setValue(_newPatternId);
+  patterns[_instr]->permanentMute = _newMute;
+  patterns[_instr]->gateLenghtSize = _newLenght;
+}
+
 
 void Mood::changeMaxMoods(uint16_t _max)
 {
