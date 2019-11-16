@@ -722,7 +722,7 @@ void loop()
       switch (laddderMenuOption)
       {
       case COMMANDTAP:
-        //calculate if the tap will be saved on this step or into next
+        //compute if the tap will be saved on this step or into next
         int8_t updateDisplayTapStep;
         if (micros() < (u_lastTick + (u_tickInterval >> 1))) //if we are still in the same step
         {
@@ -799,7 +799,7 @@ void loop()
       parameterActivity = true;
     }
     queuedMelodyParameter++;
-    if (queuedMelodyParameter >= MAXMELODYPARMS)
+    if (queuedMelodyParameter >= MAXMELODYPARMS - 1)
       queuedMelodyParameter = 0;
   }
   if (parameterActivity && info.debounced())

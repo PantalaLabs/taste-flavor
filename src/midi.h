@@ -93,7 +93,7 @@ uint8_t chromaTable[] = {
 // #define WTMAXNOTES 30
 // #define CHROMAMAXNOTES 60
 // }
-int16_t mapMidi2Volt(int16_t note, uint8_t dac)
+int16_t mapMidi2Volt(int16_t note)
 {
   return map(note, 0, 60, 0, 4095);
 }

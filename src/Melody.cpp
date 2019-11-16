@@ -16,14 +16,18 @@ Melody::Melody(uint8_t maxsteps)
   stepCounter = 0;
   randomSeed(micros());
   computeNewMelody();
-  calculateAccents();
+  computeAccents();
+  computeSubMelody();
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
 uint16_t Melody::getNote()
 {
   //final melody + key + accent
-  _lastPlayedNote = applyFilter(finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + parameters[PARAMKEY][2] + accent[stepCounter]);
+  _lastPlayedNote = applyFilter(
+      subMelody[stepCounter] +                                       //
+      finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + //
+      parameters[PARAMKEY][2] + accent[stepCounter]);
   //_lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
   _lastPlayedNote = constrain(_lastPlayedNote, 0, 60);
 
@@ -31,7 +35,7 @@ uint16_t Melody::getNote()
   if (stepCounter >= _maxsteps)
     stepCounter = 0;
 
-  return mapMidi2Volt(_lastPlayedNote, 0);
+  return mapMidi2Volt(_lastPlayedNote);
 }
 
 void Melody::resetStepCounter()
@@ -51,9 +55,11 @@ boolean Melody::updateParameters(uint8_t _param, uint16_t _val)
     //   Serial.println(read);
     parameters[_param][2] = read;
     if (_param == PARAMACC)
-      calculateAccents();
+      computeAccents();
     else if (_param == PARAMSPR)
       computeNewMelody();
+    else if (_param == PARAMSUB)
+      computeSubMelody();
     return true;
   }
   return false;
@@ -67,19 +73,20 @@ void Melody::computeNewMelody()
     //key + spread
     //initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
     initialMelody[step] = BASE10BITVOLTAGE + random(-parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE, parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE);
-    initialMelody[step] = map10bitAnalog2Scaled5octMidiNote(initialMelody[step], pentaTable);
+    initialMelody[step] = map(initialMelody[step], 0, 1023, 0, 60);
+    //initialMelody[step] = map10bitAnalog2Scaled5octMidiNote(initialMelody[step], pentaTable);
     //inheritance
     if (chance(parameters[PARAMINH][2], 100))
       finalMelody[step] = initialMelody[step];
   }
   //accents
-  calculateAccents();
+  computeAccents();
 }
 
-uint8_t Melody::applyFilter(uint8_t _note)
+int8_t Melody::applyFilter(int8_t _note)
 {
-  uint8_t newNote;
-  uint8_t filterValue = parameters[PARAMFIL][2];
+  int8_t newNote;
+  int8_t filterValue = parameters[PARAMFIL][2];
   if (_note > 0) //if there was a note to play .. go ahead or silence
   {              //filter it
     newNote = _note;
@@ -99,7 +106,24 @@ uint8_t Melody::applyFilter(uint8_t _note)
   return 0;
 }
 
-void Melody::calculateAccents()
+uint8_t subMelodyMagicNumbers[7][2] = {{64, 0}, {32, 1}, {16, 1}, {8, 1}, {32, 4}, {16, 4}, {8, 4}};
+void Melody::computeSubMelody()
+{
+  int8_t lastSection = 0;
+  int8_t filler = 0;
+  for (uint8_t step = 0; step < _maxsteps; step++)
+  {
+    int8_t newSection = step / subMelodyMagicNumbers[parameters[PARAMSUB][2]][0];
+    if (lastSection != newSection)
+    {
+      lastSection = newSection;
+      filler = random(-subMelodyMagicNumbers[parameters[PARAMSUB][2]][1], subMelodyMagicNumbers[parameters[PARAMSUB][2]][1]);
+    }
+    subMelody[step] = filler;
+  }
+}
+
+void Melody::computeAccents()
 {
   uint8_t MINCHANCE = 1;
   uint8_t MAXCHANCE = 3;

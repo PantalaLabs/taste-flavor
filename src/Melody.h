@@ -12,15 +12,15 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include <PantalaDefines.h>
 #include <Filter.h>
 
-
-#define MAXMELODYPARMS 6 //max ppotentiometer arameters
-#define PARAMSPR 0      //spread
-#define PARAMKEY 1      //key
-#define PARAMACC 2      //accent
-#define PARAMINH 3      //inheritance
-#define PARAMFIL 4      //filter
-#define PARAMSIZ 5      //size
-#define MAXREADSCALE 48 //
+#define MAXMELODYPARMS 7 //max ppotentiometer arameters
+#define PARAMSPR 0       //spread
+#define PARAMKEY 1       //key
+#define PARAMACC 2       //accent
+#define PARAMINH 3       //inheritance
+#define PARAMFIL 4       //filter
+#define PARAMSIZ 5       //size
+#define PARAMSUB 6       //sub melody
+#define MAXREADSCALE 48  //
 
 class Melody
 {
@@ -32,14 +32,16 @@ public:
   void computeNewMelody();
 
 private:
-  void calculateAccents();
-  uint8_t applyFilter(uint8_t _note);
+  void computeAccents();
+  void computeSubMelody();
+  int8_t applyFilter(int8_t _note);
   uint8_t stepCounter; //melody step counter
-  //2=final original calculated
+  //2=final original computed
   //1=final complete hith inheritance
-  //0=final with calculated loops
+  //0=final with computed loops
   int16_t initialMelody[64];
   int16_t finalMelody[64];
+  int16_t subMelody[64];
   int16_t accent[64];
   int16_t lastRead[MAXMELODYPARMS];
   int16_t parameters[MAXMELODYPARMS][4] = {
@@ -49,7 +51,8 @@ private:
       {0, 6, 0, 1},    //"accents"         //**
       {1, 10, 50, 10}, //"inheritance",   //*
       {1, 15, 30, 4},  //"filter"         //**
-      {0, 4, 2, 1}     //"size",          //**
+      {0, 4, 2, 1},    //"size",          //**
+      {0, 6, 5, 1}     //"sub melody",          //**
   };
   uint8_t _maxsteps;
   uint8_t _lastPlayedNote;
