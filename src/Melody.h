@@ -8,6 +8,7 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define Melody_h
 
 #include "tf_Defines.h"
+#include "Pinout.h"
 #include <Arduino.h>
 #include <PantalaDefines.h>
 #include <Filter.h>

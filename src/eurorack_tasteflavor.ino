@@ -6,7 +6,7 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 */
 
 #include "tf_Defines.h" //global taste and flavor defines
-
+#include "Pinout.h"     //pinout defines
 #include <Arduino.h>
 #include <PantalaDefines.h>
 #include <EventDebounce.h>
@@ -51,79 +51,11 @@ Melody *melody;
 #define COMMANDSIL 6
 #define COMMANDERS 7
 #define COMMANDTRL 8
-AnalogInput ladderMenu(A6);
+AnalogInput ladderMenu(G_LADDERMENUPIN);
 uint8_t laddderMenuOption;
 int laddderMenuSeparators[MAXPARAMETERS + 1] = {23, 65, 105, 200, 300, 480, 610, 715, 1023};
 EventDebounce laddderMenuReadInterval(60);
 boolean parameterActivity;
-
-//PINS
-#define TRIGGERINPIN 51
-#define RESETINPIN 53
-#define RXPIN 17
-#define TXPIN 18
-
-#define SDAPIN 20
-#define SCLPIN 21
-
-//encoders
-#define MAXENCODERS 8  //total of encoders
-#define MOODENCODER 0  //MOOD encoder id
-#define CROSSENCODER 1 //CROSS encoder id
-
-#define ENCPINAMOOD 13
-#define ENCPINBMOOD 12
-#define ENCBUTPINMOOD 11
-#define ENCPINACROSS 10
-#define ENCPINBCROSS 9
-#define ENCBUTPINCROSS 8
-#define ENCPINAINSTR1 38
-#define ENCPINBINSTR1 36
-#define ENCBUTPININSTR1 40
-#define ENCPINAINSTR2 32
-#define ENCPINBINSTR2 30
-#define ENCBUTPININSTR2 34
-#define ENCPINAINSTR3 44
-#define ENCPINBINSTR3 42
-#define ENCBUTPININSTR3 46
-#define ENCPINAINSTR4 14
-#define ENCPINBINSTR4 15
-#define ENCBUTPININSTR4 22
-#define ENCBUTPININSTR5 52
-#define ENCPINAINSTR5 50
-#define ENCPINBINSTR5 48
-#define ENCBUTPININSTR6 28
-#define ENCPINAINSTR6 26
-#define ENCPINBINSTR6 24
-
-//trigger out
-#define TRIGOUTPATTERNPIN1 7
-#define TRIGOUTPIN1 5
-#define TRIGOUTPIN2 3
-#define TRIGOUTPIN3 16
-#define TRIGOUTPIN4 29
-#define TRIGOUTPIN5 23
-#define TRIGOUTPIN6 27
-
-#define PARAMACTIVITY 47
-
-//action buttons
-#define ACTIONPININSTR1 6
-#define ACTIONPININSTR2 4
-#define ACTIONPININSTR3 2
-#define ACTIONPININSTR4 17
-#define ACTIONPININSTR5 31
-#define ACTIONPININSTR6 25
-
-//encoder buttons
-#define ENCBUTMOOD 0
-#define ENCBUTCROSS 1
-#define ENCBUTINSTR1 2
-#define ENCBUTINSTR2 3
-#define ENCBUTINSTR3 4
-#define ENCBUTINSTR4 5
-#define ENCBUTINSTR5 6
-#define ENCBUTINSTR6 7
 
 //interface
 EventDebounce info(30);
