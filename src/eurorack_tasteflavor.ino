@@ -194,14 +194,16 @@ char *moodKitName[G_MAXMEMORYMOODS] = {
     "P.Labs-Empty Room",
     "P.Labs-Choke",
     "P.Labs-April23",
-    "Carlos Pires-Drama"};
+    "Carlos Pires-Drama",
+    "P.Labs-Fat Cortex"};
 //{pattern id, pattern id, pattern id, pattern id, pattern id, pattern id, absolute volume reduction}
 uint32_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
     {2, 3, 3, 4, 3, 1}, //P.Labs-Choke
     {2, 3, 4, 2, 3, 1}, //P.Labs-April23
-    {2, 5, 5, 2, 5, 4}  //Carlos Pires-Drama
+    {2, 5, 5, 2, 5, 4}, //Carlos Pires-Drama
+    {2, 6, 5, 6, 6, 1}  //P.Labs-Fat Cortex
 };
 
 //decks
