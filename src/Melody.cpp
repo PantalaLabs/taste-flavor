@@ -7,18 +7,16 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 
 #include "tf_Defines.h"
 #include "Melody.h"
-#include "midi.h"
 #include <PantalaDefines.h>
 #include <Counter.h>
 
-Melody::Melody(uint8_t maxsteps)
+Melody::Melody()
 {
-  _maxsteps = maxsteps;
   stepCounter = 0;
   queuedParameter = new Counter(MAXMELODYPARMS - 1);
   for (uint8_t i = 0; i < MAXMELODYPARMS; i++)
     filters[i] = new Filter(6);
-  randomSeed(micros());
+  randomSeed(analogRead(G_MELODYPARAMPIN4));
   computeNewMelody();
   computeAccents();
   computeSubMelody();
@@ -30,16 +28,16 @@ uint16_t Melody::getNote()
   //final melody + key + accent
   _lastPlayedNote = applyFilter(
       subMelody[stepCounter] +                                       //
-      finalMelody[loopArray[parameters[PARAMSIZ][2]][stepCounter]] + //
+      finalMelody[loopArray[parameters[PARAMLSZ][2]][stepCounter]] + //
       parameters[PARAMKEY][2] + accent[stepCounter]);
   //_lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
   _lastPlayedNote = constrain(_lastPlayedNote, 0, 60);
 
   stepCounter++;
-  if (stepCounter >= _maxsteps)
+  if (stepCounter >= G_MAXSTEPS)
     stepCounter = 0;
 
-  return mapMidi2Volt(_lastPlayedNote);
+  return NOTES[_lastPlayedNote];
 }
 
 void Melody::resetStepCounter()
@@ -49,18 +47,17 @@ void Melody::resetStepCounter()
 
 boolean Melody::readNewMelodyParameter()
 {
-  uint8_t _param = queuedParameter->advance();
-  uint16_t read;
-  read = analogRead(potentiometerPins[_param]);
-  read = filters[_param]->add(read);
-  read = read >> 4;
-  read = min(read, MAXREADSCALE); //crop value to MAXSCALE
-  read = map(read, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
-  if (parameters[_param][2] != read)
+  uint8_t _param;
+  uint16_t _read;
+  _param = queuedParameter->advance();
+  _read = analogRead(potentiometerPins[_param]);
+  _read = filters[_param]->add(_read);
+  _read = _read >> 4;
+  _read = min(_read, MAXREADSCALE); //crop value to MAXSCALE
+  _read = map(_read, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
+  if (parameters[_param][2] != _read)
   {
-    // if (_param == PARAMSIZ)
-    //   Serial.println(read);
-    parameters[_param][2] = read;
+    parameters[_param][2] = _read;
     if (_param == PARAMACC)
       computeAccents();
     else if (_param == PARAMSPR)
@@ -75,7 +72,12 @@ boolean Melody::readNewMelodyParameter()
 //PRIVATE----------------------------------------------------------------------------------------------
 void Melody::computeNewMelody()
 {
-  for (uint8_t step = 0; step < _maxsteps; step++)
+  uint8_t step = 0;
+  uint8_t lastValidNote = 0;
+  // uint8_t stepsize = powint(2, parameters[PARAMSSZ][2]);
+  uint8_t stepsize = 1;
+
+  while (step < G_MAXSTEPS)
   {
     //key + spread
     //initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
@@ -85,6 +87,13 @@ void Melody::computeNewMelody()
     //inheritance
     if (chance(parameters[PARAMINH][2], 100))
       finalMelody[step] = initialMelody[step];
+    lastValidNote = step;
+    // for (int8_t stepfiller = 1; stepfiller < stepsize; stepfiller++)
+    // {
+    //   step++;
+    //   finalMelody[step] = finalMelody[lastValidNote];
+    // }
+    step++;
   }
   //accents
   computeAccents();
@@ -118,16 +127,19 @@ void Melody::computeSubMelody()
 {
   int8_t lastSection = 0;
   int8_t filler = 0;
-  for (uint8_t step = 0; step < _maxsteps; step++)
-  {
-    int8_t newSection = step / subMelodyMagicNumbers[parameters[PARAMSUB][2]][0];
-    if (lastSection != newSection)
-    {
-      lastSection = newSection;
-      filler = random(-subMelodyMagicNumbers[parameters[PARAMSUB][2]][1], subMelodyMagicNumbers[parameters[PARAMSUB][2]][1]);
-    }
-    subMelody[step] = filler;
-  }
+  //##############
+  for (uint8_t step = 0; step < G_MAXSTEPS; step++)
+    subMelody[step] = random(2);
+  // for (uint8_t step = 0; step < G_MAXSTEPS; step++)
+  // {
+  //   int8_t newSection = step / subMelodyMagicNumbers[parameters[PARAMSUB][2]][0];
+  //   if (lastSection != newSection)
+  //   {
+  //     lastSection = newSection;
+  //     filler = random(-subMelodyMagicNumbers[parameters[PARAMSUB][2]][1], subMelodyMagicNumbers[parameters[PARAMSUB][2]][1]);
+  //   }
+  //   subMelody[step] = filler;
+  // }
 }
 
 void Melody::computeAccents()
@@ -135,7 +147,7 @@ void Melody::computeAccents()
   uint8_t MINCHANCE = 1;
   uint8_t MAXCHANCE = 3;
 
-  for (uint8_t step = 0; step < _maxsteps; step++)
+  for (uint8_t step = 0; step < G_MAXSTEPS; step++)
   {
     accent[step] = 0;
     switch (parameters[PARAMACC][2])

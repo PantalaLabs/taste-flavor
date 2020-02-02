@@ -36,6 +36,7 @@ for (uint8_t j = 0; j < (originalMoodQtty + imp); j++)
 #define SdComm_h
 
 #include "tf_defines.h"
+#include "Pinout.h"
 #include "Arduino.h"
 #include <SPI.h>
 #include <SD.h>

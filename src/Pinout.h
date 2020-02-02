@@ -18,7 +18,8 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 //triggers
 #define TRIGGERINPIN 51
 #define RESETINPIN 53
-#define TRIGOUTPATTERNPIN1 7
+#define TRIGOUTPATTERNPIN 7
+#define PARAMETERCHANGE 49
 #define TRIGOUTPIN1 5
 #define TRIGOUTPIN2 3
 #define TRIGOUTPIN3 16
@@ -55,12 +56,12 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define ENCPINAINSTR4 14
 #define ENCPINBINSTR4 15
 #define ENCBUTPININSTR4 22
-#define ENCBUTPININSTR5 52
 #define ENCPINAINSTR5 50
 #define ENCPINBINSTR5 48
-#define ENCBUTPININSTR6 28
+#define ENCBUTPININSTR5 52
 #define ENCPINAINSTR6 26
 #define ENCPINBINSTR6 24
+#define ENCBUTPININSTR6 28
 
 //encoder buttons
 #define ENCBUTMOOD 0
@@ -73,16 +74,17 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define ENCBUTINSTR6 7
 
 //sd card chip selelect
-#define SD_CS 43
+#define SD_CS 39
 
 //=======================analog pins=======================
-#define G_LADDERMENUPIN A6   //laddr menu
-#define G_MELODYPARAMPIN0 A0 //melody parameters
-#define G_MELODYPARAMPIN1 A1
-#define G_MELODYPARAMPIN2 A2
-#define G_MELODYPARAMPIN3 A3
-#define G_MELODYPARAMPIN4 A4
-#define G_MELODYPARAMPIN5 A5
+#define G_LADDERMENUPIN A0   //laddr menu
+#define G_MELODYPARAMPIN0 A1 //melody parameters
+#define G_MELODYPARAMPIN1 A2
+#define G_MELODYPARAMPIN2 A3
+#define G_MELODYPARAMPIN3 A4
+#define G_MELODYPARAMPIN4 A5
+#define G_MELODYPARAMPIN5 A6
 #define G_MELODYPARAMPIN6 A7
+#define G_MELODYPARAMPIN7 A8
 
 #endif

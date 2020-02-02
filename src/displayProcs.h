@@ -30,7 +30,7 @@ void displayWelcome()
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(F("<-- select your mood"));
-  display.println(F("    and cross it -->"));
+  display.println(F("       and cross -->"));
 }
 
 void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
