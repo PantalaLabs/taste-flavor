@@ -10,6 +10,9 @@ to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
 <li>11/15/2019<br>
+  After a 3 month delay to receive the PCBs , we are on ther track again to last hardware revision .<br>
+
+<li>11/15/2019<br>
   Another huge code improvement with new object classes.<br>
   CV generator improved with SubMelody parameter.<br>
 
