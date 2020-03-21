@@ -9,6 +9,9 @@ There are other CMPs who have also confirmed participation but asked
 to wait until they sent the full Mood or asked to contact them later.
 ```
 UPDATES:
+<li>03/20/2020<li>
+  <a href="https://www.youtube.com/watch?v=YjFXUJCpMqE"> The first (low quality) video</a> with a fully functional prototype and some imported moods from our CMPs.
+
 <li>11/15/2019<br>
   After a 3 month delay to receive the PCBs , we are on ther track again to last hardware revision .<br>
 
