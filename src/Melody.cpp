@@ -1,5 +1,5 @@
 /*
-Taste & Flavor is an Eurorack module sequence steps, play samples and create Melodys
+Taste & Flavor is an Eurorack module sequence steps, play samples and create Melodies
 Creative Commons License CC-BY-SA
 Taste & Flavor  by Gibran Curtiss Salomão/Pantala Labs is licensed
 under a Creative Commons Attribution-ShareAlike 4.0 International License.
@@ -7,7 +7,7 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 
 #include "tf_Defines.h"
 #include "Melody.h"
-#include <PantalaDefines.h>
+//#include <PantalaDefines.h>
 #include <Counter.h>
 
 Melody::Melody()
@@ -33,11 +33,14 @@ uint16_t Melody::getNote()
   //_lastPlayedNote = applyFilter(finalMelody[stepCounter] + accent[stepCounter]);
   _lastPlayedNote = constrain(_lastPlayedNote, 0, 60);
 
+  //scale note
+  _lastPlayedNote = quantizeMidiNote(_lastPlayedNote, parameters[PARAMSCL][2]);
+
   stepCounter++;
   if (stepCounter >= G_MAXSTEPS)
     stepCounter = 0;
 
-  return NOTES[_lastPlayedNote];
+  return _lastPlayedNote;
 }
 
 void Melody::resetStepCounter()
@@ -55,50 +58,43 @@ boolean Melody::readNewMelodyParameter()
   _read = _read >> 4;
   _read = min(_read, MAXREADSCALE); //crop value to MAXSCALE
   _read = map(_read, 0, MAXREADSCALE, parameters[_param][0], parameters[_param][1] * parameters[_param][3]);
+  //if new reading changed from last saved
   if (parameters[_param][2] != _read)
   {
     parameters[_param][2] = _read;
     if (_param == PARAMACC)
       computeAccents();
-    else if (_param == PARAMSPR)
-      computeNewMelody();
     else if (_param == PARAMSUB)
       computeSubMelody();
+    if ((_param == PARAMSPR)) //no other parameter needs to create new melody because they are dinamically computed at getNote() proc
+      computeNewMelody();
     return true;
   }
   return false;
 }
 
-//PRIVATE----------------------------------------------------------------------------------------------
+//compute new base sequence : starts with 10bit field and finished into MIDI field
 void Melody::computeNewMelody()
 {
   uint8_t step = 0;
-  uint8_t lastValidNote = 0;
-  // uint8_t stepsize = powint(2, parameters[PARAMSSZ][2]);
-  uint8_t stepsize = 1;
 
-  while (step < G_MAXSTEPS)
+  for (uint8_t step = 0; step < G_MAXSTEPS; step++)
   {
-    //key + spread
-    //initialMelody[step] = baseNote + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
-    initialMelody[step] = BASE10BITVOLTAGE + random(-parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE, parameters[PARAMSPR][2] * BASE10BITMIDISTEPVOLTAGE);
-    initialMelody[step] = map(initialMelody[step], 0, 1023, 0, 60);
-    //initialMelody[step] = map10bitAnalog2Scaled5octMidiNote(initialMelody[step], pentaTable);
+    //compute first basic sequence
+    //key + spread / starts at centered on MIDI note 24
+    initialMelody[step] = 24 + random(-parameters[PARAMSPR][2], parameters[PARAMSPR][2]);
+
     //inheritance
     if (chance(parameters[PARAMINH][2], 100))
       finalMelody[step] = initialMelody[step];
-    lastValidNote = step;
-    // for (int8_t stepfiller = 1; stepfiller < stepsize; stepfiller++)
-    // {
-    //   step++;
-    //   finalMelody[step] = finalMelody[lastValidNote];
-    // }
-    step++;
+
+    finalMelody[step] = initialMelody[step];
   }
   //accents
   computeAccents();
 }
 
+//apply HPF or LPF : MIDI field
 int8_t Melody::applyFilter(int8_t _note)
 {
   int8_t newNote;
@@ -122,26 +118,25 @@ int8_t Melody::applyFilter(int8_t _note)
   return 0;
 }
 
+//compute sub melodies : MIDI field
 uint8_t subMelodyMagicNumbers[7][2] = {{64, 0}, {32, 1}, {16, 1}, {8, 1}, {32, 4}, {16, 4}, {8, 4}};
 void Melody::computeSubMelody()
 {
-  int8_t lastSection = 0;
+  int8_t lastSection = 200;
   int8_t filler = 0;
-  //##############
   for (uint8_t step = 0; step < G_MAXSTEPS; step++)
-    subMelody[step] = random(2);
-  // for (uint8_t step = 0; step < G_MAXSTEPS; step++)
-  // {
-  //   int8_t newSection = step / subMelodyMagicNumbers[parameters[PARAMSUB][2]][0];
-  //   if (lastSection != newSection)
-  //   {
-  //     lastSection = newSection;
-  //     filler = random(-subMelodyMagicNumbers[parameters[PARAMSUB][2]][1], subMelodyMagicNumbers[parameters[PARAMSUB][2]][1]);
-  //   }
-  //   subMelody[step] = filler;
-  // }
+  {
+    int16_t newSection = step / subMelodyMagicNumbers[parameters[PARAMSUB][2]][0];
+    if (lastSection != newSection)
+    {
+      lastSection = newSection;
+      filler = random(-subMelodyMagicNumbers[parameters[PARAMSUB][2]][1], subMelodyMagicNumbers[parameters[PARAMSUB][2]][1]);
+    }
+    subMelody[step] = filler;
+  }
 }
 
+//compute eventual accents : MIDI field
 void Melody::computeAccents()
 {
   uint8_t MINCHANCE = 1;

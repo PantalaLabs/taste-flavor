@@ -9,6 +9,7 @@ void displayUpdateLineArea(uint8_t _line, String _content);
 void displayEraseLineBlockAndSetText(uint8_t _line);
 void displayShowCornerInfo(uint8_t _parm, int16_t _val);
 void displayShowCrossBar(int8_t _size);
+void displayClockSource();
 void displayWelcome();
 boolean crossfadedDeck(uint8_t _instr);
 
@@ -29,8 +30,8 @@ void displayWelcome()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println(F("<-- select your mood"));
-  display.println(F("       and cross -->"));
+  display.println(F("<-- mood"));
+  display.println(F("           cross -->"));
 }
 
 void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
@@ -42,6 +43,16 @@ void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 
       display.fillRect(10 * i, 0, 10, TEXTLINE_HEIGHT - 2, WHITE);
     lastCrossBarGraphValue = _size;
   }
+}
+
+void displayClockSource() //update crossing status / 6 steps of 10 pixels each
+{
+  display.fillRect(120, 0, DISPLAY_WIDTH - 120, TEXTLINE_HEIGHT, BLACK);
+  display.setCursor(120, 0);
+  if (internalClockSource)
+    display.print("I");
+  else
+    display.print("E");
 }
 
 void displayShowCornerInfo(uint8_t _parm, int16_t _val) //update display right upper corner with the actual sample or pattern number

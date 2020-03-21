@@ -8,9 +8,9 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #include "tf_Defines.h" //global taste and flavor defines
 #include "Pinout.h"     //pinout defines
 #include <Arduino.h>
-#include <PantalaDefines.h>
-#include <EventDebounce.h>
 #include <Rotary.h>
+#include <EventDebounce.h>
+#include <PantalaDefines.h>
 #include <DueTimer.h>
 #include <AnalogInput.h>
 #include <Trigger.h>
@@ -42,25 +42,22 @@ Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
 #include "Melody.h"
 Melody *melody;
 
-#include "Melody2.h"
-Melody *melody2;
-
 //ladder menu
 #define MAXPARAMETERS 9
-#define COMMANDSMP 1
-#define COMMANDGHO 2
-#define COMMANDTAP 3
-#define COMMANDUND 4
-#define COMMANDSIL 5
-#define COMMANDERS 6
-#define COMMANDGTL 7
-#define COMMANDBPM 8
-#define COMMANDLAT 9
+#define COMMANDSMP 0
+#define COMMANDGHO 1
+#define COMMANDTAP 2
+#define COMMANDUND 3
+#define COMMANDSIL 4
+#define COMMANDERS 5
+#define COMMANDGTL 6
+#define COMMANDLAT 7
+#define COMMANDCLS 8
 
 AnalogInput ladderMenu(G_LADDERMENUPIN);
 uint8_t laddderMenuOption;
-int laddderMenuSeparators[MAXPARAMETERS + 1] = {30, 140, 290, 490, 620, 750, 840, 900, 950, G_MAX10BIT};
-EventDebounce laddderMenuReadInterval(60);
+int laddderMenuSeparators[MAXPARAMETERS + 1] = {30, 140, 290, 490, 620, 750, 840, 900, 980, G_MAX10BIT};
+EventDebounce laddderMenuReadInterval(100);
 
 //time related and bpm
 volatile uint32_t u_lastTick;                   //last time tick was called
@@ -93,7 +90,7 @@ Trigger trigOutPattern(TRIGOUTPATTERNPIN);
 Trigger parameterChange(PARAMETERCHANGE);
 
 EventDebounce interfaceEvent(200); //min time in ms to accept another interface event
-EventDebounce melodieUpdate(70);   //min time in ms read new melody parameter
+EventDebounce melodyUpdate(70);    //min time in ms read new melody parameter
 
 Rotary moodEncoderPot(ENCPINAMOOD, ENCPINBMOOD);
 Rotary crossEncoderPot(ENCPINACROSS, ENCPINBCROSS);
@@ -119,8 +116,10 @@ int8_t flagUD_newGateLenght = -1;        //update gate lenght on right upper cor
 int8_t flagUD_eraseThisPattern = -1;     //erase selected pattern
 int8_t flagUD_tapNewStep = -1;           //tap new step
 int8_t flagUD_rollbackTappedStep = -1;   //undo tapped step
+boolean flagUD_newClockSource = false;   //changes clock source
+
 boolean defaultDisplayNotActiveYet = true;
-boolean externalClockSource = 0; //0=internal , 1=external
+boolean internalClockSource = true; //0=internal , 1=external
 
 EventDebounce switchBackToInternalClock(3000);
 
@@ -139,8 +138,11 @@ char *moodKitName[G_MAXMEMORYMOODS] = {
     "P.Labs-Fat Cortex",
     "P.Labs-Straight Lane",
     "P.Labs-Chained",
-    "P.Labs-EasyBreak"};
+    "P.Labs-EasyBreak",
+    "Edu M-Crispy Mood"};
 //{pattern id, pattern id, pattern id, pattern id, pattern id, pattern id, absolute volume reduction}
+//reserved SWITCH = 0
+//reserved MUTE = 1
 uint32_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
     {1, 1, 1, 1, 1, 1}, //reserved MUTE = 1
     {2, 2, 2, 2, 2, 2}, //P.Labs-Empty Room
@@ -150,7 +152,8 @@ uint32_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
     {2, 6, 5, 6, 6, 1}, //P.Labs-Fat Cortex
     {2, 4, 6, 7, 7, 5}, //P.Labs-Straight Lane
     {2, 3, 7, 2, 3, 2}, //P.Labs-Chained
-    {3, 7, 8, 4, 4, 6}  //P.Labs-EasyBreak
+    {3, 7, 8, 4, 4, 6}, //P.Labs-EasyBreak
+    {2, 8, 9, 5, 8, 7}  //Edu M-Crispy Mood
 };
 
 //decks
@@ -162,6 +165,7 @@ int8_t lastCrossfadedValue = G_MAXINSTRUMENTS;
 void setup()
 {
 
+//serial monitor
 #if DO_SERIAL == true
   Serial.begin(9600);
   Serial.println("Debugging..");
@@ -171,36 +175,35 @@ void setup()
   analogReadResolution(10);
   pinMode(DAC0, OUTPUT);
 
-  //start decks and melody
-  mood[0] = new Mood(G_INTERNALMOODS);
-  mood[1] = new Mood(G_INTERNALMOODS);
-  melody = new Melody();
+  pinMode(TRIGGERINPIN, INPUT_PULLUP);
+
+  pinMode(RESETINPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(RESETINPIN), ISRresetSeq, FALLING);
+
   ladderMenu.setMenu(laddderMenuSeparators, MAXPARAMETERS + 1);
 
-  // // Control the pattern generator from the param inputs
-  // pattern_generator->cv_pattern_input = inputs->param1->smooth;
-  // pattern_generator->gate_pattern_input = inputs->param2->smooth;
-  // pattern_generator->gate_density_input = inputs->param3->smooth;
-  // pattern_generator->length_input = new ModuleConstant(16);
-  // // Sample + Hold the pattern generator CV output with
-  // sample_and_hold->sample_input = pattern_generator;
-  // sample_and_hold->trigger_input = pattern_generator->gate_output;
-  // // Quantize the output.  The SR input selects the scale
-  // quantizer->compute(analogRad(scale),analogRad(cv));
-  // envelope_generator->trigger_input = pattern_generator->gate_output;
-
-  //import moods from SD card
-#if DO_SD == true
-  sdc = new SdComm(SD_CS, true);
-  sdc->importMoods(moodKitName, moodKitData, G_INTERNALMOODS);
-  importedMoodsFromSd = sdc->getimportedRecords();
-  //update decks to recognize new moods
-  mood[0]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
-  mood[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
+  //setup display Address 0x3D for 128x64
+  if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
+  {
+#if DO_SERIAL == true
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ; // Don't proceed
 #endif
-
-  // pinMode(TRIGGERINPIN, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRswitchToExternal, RISING);
+  }
+  else
+  {
+#if DO_SERIAL == true
+    Serial.println(F("Display OK!"));
+#endif
+  }
+  delay(100);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE); // white text
+  display.cp437(true);
+  display.setCursor(0, 0);
+  display.display();
 
   //start all encoders and it´s buttons
   for (uint8_t i = 0; i < MAXENCODERS; i++)
@@ -221,20 +224,19 @@ void setup()
   }
 
   //trigger out TEST
-
   trigOutPattern.start();
   parameterChange.start();
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
     digitalWrite(triggerPins[i], HIGH);
     analogWrite(DAC0, i * 512);
-    delay(250);
+    delay(100);
   }
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
     digitalWrite(triggerPins[i], LOW);
     analogWrite(DAC0, (G_MAXINSTRUMENTS - i) * 512);
-    delay(250);
+    delay(100);
   }
   analogWrite(DAC0, 0);
   trigOutPattern.end();
@@ -249,11 +251,29 @@ void setup()
     delay(5000);
   }
 
-  //if crossfader calibrate button pressed  ladder menu
-  while (!digitalRead(ENCBUTPINCROSS))
+  //if crossfader button pressed  starts ladder menu
+  if (!digitalRead(ENCBUTPINCROSS))
   {
-    Serial.println(analogRead(G_LADDERMENUPIN));
-    delay(10);
+    uint16_t ladderRead;
+#if DO_SERIAL == true
+    Serial.println(F("Ladder menu"));
+#endif
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(WHITE); // white text
+    display.cp437(true);
+    display.setCursor(0, 0);
+    while (!digitalRead(ENCBUTPINCROSS))
+    {
+      ladderRead = analogRead(G_LADDERMENUPIN);
+#if DO_SERIAL == true
+      Serial.println(ladderRead);
+#endif
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.print(ladderRead);
+      display.display();
+    }
   }
 
   //if instrument 1 button pressed , show all analog read
@@ -285,6 +305,35 @@ void setup()
       digitalWrite(triggerPins[i], LOW);
   }
 
+  melody = new Melody();
+
+  //start decks and melody
+  mood[0] = new Mood(G_INTERNALMOODS);
+  mood[1] = new Mood(G_INTERNALMOODS);
+
+  // // Control the pattern generator from the param inputs
+  // pattern_generator->cv_pattern_input = inputs->param1->smooth;
+  // pattern_generator->gate_pattern_input = inputs->param2->smooth;
+  // pattern_generator->gate_density_input = inputs->param3->smooth;
+  // pattern_generator->length_input = new ModuleConstant(16);
+  // // Sample + Hold the pattern generator CV output with
+  // sample_and_hold->sample_input = pattern_generator;
+  // sample_and_hold->trigger_input = pattern_generator->gate_output;
+  // // Quantize the output.  The SR input selects the scale
+  // quantizer->compute(analogRad(scale),analogRad(cv));
+  // envelope_generator->trigger_input = pattern_generator->gate_output;
+
+  //import moods from SD card
+
+#if DO_SD == true
+  sdc = new SdComm(SD_CS, true);
+  sdc->importMoods(moodKitName, moodKitData, G_INTERNALMOODS);
+  importedMoodsFromSd = sdc->getimportedRecords();
+  //update decks to recognize new moods
+  mood[0]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
+  mood[1]->changeMaxMoods(G_INTERNALMOODS + importedMoodsFromSd);
+#endif
+
 #if DO_WT == true
   // WAV Trigger startup at 57600
   delay(1000);
@@ -296,22 +345,6 @@ void setup()
   wTrig.setReporting(true);
   delay(100);
 #endif
-
-  //setup display Address 0x3D for 128x64
-  if (!display.begin(SSD1306_SWITCHCAPVCC, I2C_ADDRESS))
-  {
-#if DO_SERIAL == true
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;)
-      ; // Don't proceed
-#endif
-  }
-  else
-  {
-#if DO_SERIAL == true
-    Serial.println(F("Display OK!"));
-#endif
-  }
 
   //if instrument 3 button pressed , display SDA/SCL test
   if (!digitalRead(ENCBUTPININSTR3))
@@ -334,6 +367,25 @@ void setup()
       //if instrument 3 button pressed again  , exit test
     }
   }
+
+  //if instrument 4 button pressed , display DAC test
+  if (!digitalRead(ENCBUTPININSTR4))
+  {
+#if DO_SERIAL == true
+    Serial.println(F("DAC Test"));
+#endif
+    digitalWrite(TRIGOUTPATTERNPIN, HIGH);
+    delay(3000);
+    while (digitalRead(ENCBUTPININSTR4))
+    {
+      analogWrite(DAC0, 0);
+      delay(4000);
+      analogWrite(DAC0, G_MAX12BIT);
+      delay(4000);
+      //if instrument 4 button pressed again  , exit test
+    }
+  }
+
   display.clearDisplay();
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // white text
@@ -362,40 +414,39 @@ void setup()
 
   //internal clock
   u_bpm = bpm2micros4ppqn(bpm);
-  Timer3.attachInterrupt(ISRfireTimer3);
+  Timer3.attachInterrupt(ISRbaseTimer);
   Timer3.start(u_bpm);
   Timer4.attachInterrupt(ISRfireTimer4);
   Timer5.attachInterrupt(ISRendTriggers);
 }
 
-// void ISRmanualFireTimer3()
-// {
-//   noInterrupts();
-//   externalClockSource = true;
-//   Timer3.detachInterrupt();
-//   Timer3.stop();
-//   u_tickInterval = micros() - u_lastTick;
-//   u_lastTick = micros();
-//   if (u_LatencyComp >= 0)
-//     Timer4.start(u_LatencyComp);
-//   else
-//     Timer4.start(u_tickInterval + u_LatencyComp);
-//   interrupts();
-//   switchBackToInternalClock.debounce();
-// }
+void debugBeep(uint8_t _beep)
+{
+  delay(1000);
+  for (uint8_t i = 0; i < _beep; i++)
+  {
+    parameterChange.start();
+    delay(250);
+    parameterChange.end();
+    delay(250);
+  }
+  delay(1000);
+}
 
-//base clock
-void ISRfireTimer3()
+//base clock / external clock
+void ISRbaseTimer()
 {
   noInterrupts();
-  Timer3.stop();
+  if (internalClockSource)
+    Timer3.stop();
   u_tickInterval = micros() - u_lastTick;
   u_lastTick = micros();
   if (u_LatencyComp >= 0)
     Timer4.start(u_LatencyComp);
   else
     Timer4.start(u_tickInterval + u_LatencyComp);
-  Timer3.start(bpm2micros4ppqn(bpm));
+  if (internalClockSource)
+    Timer3.start(bpm2micros4ppqn(bpm));
   interrupts();
 }
 
@@ -409,14 +460,19 @@ void ISRfireTimer4()
   {
     boolean targetDeck;
     targetDeck = crossfadedDeck(instr);
-    //step all ready to play and it wasnt manually muted
+
+#if DO_WT == true
+    //play ready to play samples and if it wasnt manually muted on panel
     if (mood[targetDeck]->patterns[instr]->playThisStep(stepCount) && !instrActionState[instr])
     {
-      digitalWrite(triggerPins[instr], HIGH);
-#if DO_WT == true
       wTrig.trackGain(mood[targetDeck]->samples[instr]->getValue(), -6);
       wTrig.trackLoad(mood[targetDeck]->samples[instr]->getValue());
+    }
 #endif
+    //fire instrument trigger even if sample was licenced
+    if (mood[targetDeck]->patterns[instr]->playThisTrigger(stepCount) && !instrActionState[instr])
+    {
+      digitalWrite(triggerPins[instr], HIGH);
     }
     mood[targetDeck]->patterns[instr]->tappedStep = false; //reset any tapped step
   }
@@ -428,11 +484,15 @@ void ISRfireTimer4()
   gateLenghtCounter = 0;
   stepCount++;
   if (stepCount >= G_MAXSTEPS)
-  {
-    stepCount = 0;
-    melody->resetStepCounter();
-  }
+    ISRresetSeq();
   safeZoneEndTime = (micros() + u_tickInterval - DISPLAYUPDATETIME);
+}
+
+void ISRresetSeq()
+{
+  stepCount = 0;
+  melody->resetStepCounter();
+  trigOutPattern.start();
 }
 
 //close all trigger
@@ -510,11 +570,13 @@ void processRotaryEncoder()
         updateDisplayUpdateLatencyComp = true;
       }
       //if cross button is pressed and cross rotate CHANGE BPM
-      else if (laddderMenuOption == COMMANDBPM)
+      if (onlyOneEncoderButtonIsPressed(ENCBUTCROSS) && interfaceEvent.debounced())
       {
         flagUD_newBpmValue = true;
         bpm += encoderChange;
+        bpm = constrain(bpm, G_MINBPM, G_MAXBPM);
         u_bpm = bpm2micros4ppqn(bpm);
+        interfaceEvent.debounce(50); //block any other interface event
       }
       else
       { //or else , cross change
@@ -724,6 +786,26 @@ void loop()
     updateDisplay = true;
     flagUD_rollbackTappedStep = -1;
   }
+  //change clock source
+  else if (flagUD_newClockSource)
+  {
+    flagUD_newClockSource = false;
+    if (internalClockSource)
+    {
+      detachInterrupt(digitalPinToInterrupt(TRIGGERINPIN));
+      Timer3.attachInterrupt(ISRbaseTimer);
+      Timer3.start(u_bpm);
+    }
+    else
+    {
+      Timer3.stop();
+      Timer3.detachInterrupt();
+      attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRbaseTimer, FALLING);
+    }
+    displayClockSource();
+    updateDisplay = true;
+  }
+
   //if any display update
   if (updateDisplay)
     display.display();
@@ -732,12 +814,14 @@ void loop()
   //read all encoders buttons (invert boolean state to make easy future comparation)
   for (int8_t i = 0; i < MAXENCODERS; i++)
     encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
+
   //if new mood was selected....copy reference tables or create new mood in the cross area
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && interfaceEvent.debounced())
   {
     interfaceEvent.debounce(1000); //block any other interface event
     flagUD_newMoodSelected = true;
   }
+
   //all action (mute) buttons
   for (int8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
@@ -804,24 +888,21 @@ void loop()
       }
     }
   }
+  //change clock source
+  if ((laddderMenuOption == COMMANDCLS) && interfaceEvent.debounced())
+  {
+    flagUD_newClockSource = true;
+    internalClockSource = !internalClockSource;
+    interfaceEvent.debounce(1000);
+  }
   //long interval between readings from action ladder menu
   if (laddderMenuReadInterval.hitAndRun())
   {
-    ladderMenu.readSmoothed();
-    laddderMenuOption = ladderMenu.getSmoothedMenuIndex() + 1;
+    laddderMenuOption = ladderMenu.getRawMenuIndex();
   }
   //if it is time to read one new melody parameter input
-  if (melodieUpdate.hitAndRun() && melody->readNewMelodyParameter())
-      parameterChange.start();
-
+  if (melodyUpdate.hitAndRun() && melody->readNewMelodyParameter())
+    parameterChange.start();
   trigOutPattern.compute();
   parameterChange.compute();
-
-  // //clock source switch from external to internal
-  // if (externalClockSource && switchBackToInternalClock.debounced())
-  // {
-  //   externalClockSource = false;
-  //   Timer3.attachInterrupt(ISRfireTimer3);
-  //   Timer3.start(u_bpm);
-  // }
 }

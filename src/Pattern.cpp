@@ -16,12 +16,18 @@
 
 Pattern::Pattern(uint8_t _instr, uint8_t _maxPatterns)
 {
+
   instrumentIdentifyer = _instr;
-  id = new Counter(_maxPatterns);
+  id = new Counter(_maxPatterns + G_MAXEUCLIDIANPATTERNS);
   id->setInit(1);
   id->setCyclable(false);
   id->reset();
 
+/*   //copy all euclidean patterns to this pattern step
+  for (uint8_t j = 0; j < G_MAXEUCLIDIANPATTERNS; j++)
+    for (uint8_t step = 0; step < G_MAXSTEPS; step++)
+      steps[instrumentIdentifyer][_maxPatterns + j][step] = euclidpatterntable[j][step];
+ */
 #if DO_SD == true
   sdc = new SdComm(SD_CS, true);
   switch (instrumentIdentifyer)
@@ -79,6 +85,18 @@ boolean Pattern::getStep(uint8_t _pat, uint8_t _step, boolean _src)
 // {
 //   return steps[instrumentIdentifyer][_pat][_step];
 // }
+
+void Pattern::setNextInternalPattern()
+{
+  resetCustomPatternToOriginal();
+  id->advance();
+}
+
+void Pattern::setPreviousInternalPattern()
+{
+  resetCustomPatternToOriginal();
+  id->reward();
+}
 
 void Pattern::setStep(uint8_t _step, uint8_t _val)
 {
@@ -162,10 +180,16 @@ void Pattern::tapStep(uint8_t _step)
   addUndoStep(_step);     //insert new step into undo stack
 }
 
-//if this step isnt muted , neither tapped and a triggered 1 step
+//if this step isnt silenced , neither tapped and a triggered 1 step
 boolean Pattern::playThisStep(uint8_t _step)
 {
   return (!permanentMute && !tappedStep && getStep(_step));
+}
+
+//if this is a valid step
+boolean Pattern::playThisTrigger(uint8_t _step)
+{
+  return (getStep(_step));
 }
 
 //if this pattern is custom and there is an undo available
