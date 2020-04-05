@@ -49,7 +49,7 @@ public:
   void tapStep(uint16_t _step);
   boolean playThisStep(uint16_t _step);
   boolean playThisTrigger(uint16_t _step);
-  byte setBytePositionIntoByteBlock(byte byteBlock, byte _stepId);
+  //byte setBytePositionIntoByteBlock(byte byteBlock, byte _stepId);
   boolean solo;
   
   //legacy

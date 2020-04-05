@@ -19,12 +19,12 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 #if DO_SERIAL == true
   Serial.print("Instrument started.");
 #endif
-  solo = false;
   instrumentIdentifyer = _instr;
   maxPatterns = _maxPatterns;
+  solo = false;
 
   patternIndex = new Counter(_maxPatterns);
-  //add euclidean patterns to each pattern step
+  //add euclidean patterns to each instrument pattern collection
   patternIndex = new Counter(_maxPatterns + G_MAXEUCLIDIANPATTERNS);
   for (byte pat = 0; pat < G_MAXEUCLIDIANPATTERNS; pat++)
     for (byte block = 0; block < G_MAXBLOCKS; block++)
@@ -73,19 +73,21 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
-//return _step from the actual pattern
+//return if it is a valid/non valid _step from the actual pattern
 boolean Instrument::getStep(uint16_t _step)
 {
   byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
   return bitRead(getThisBlock, 7 - (_step % 8));
 }
 
+//return if it is a valid/non valid _step from the selected _pat
 boolean Instrument::getStep(uint16_t _pat, uint16_t _step)
 {
   byte getThisBlock = blocks[instrumentIdentifyer][_pat][_step / 8];
   return bitRead(getThisBlock, 7 - (_step % 8));
 }
 
+//return if it is a valid/non valid _step from the selected _pat from RAM or ROM sources
 boolean Instrument::getStep(uint16_t _pat, uint16_t _step, boolean _src)
 {
   //if search for the original pattern and this pattern was already customized , return the step on the BKP area
@@ -94,18 +96,21 @@ boolean Instrument::getStep(uint16_t _pat, uint16_t _step, boolean _src)
   return (bitRead(getThisBlock1, 7 - (_step % 8)) || bitRead(getThisBlock2, 7 - (_step % 8)));
 }
 
+//reset actual parttern to its default and move pattern index forward 
 void Instrument::setNextInternalPattern()
 {
   resetCustomPatternToOriginal();
   patternIndex->advance();
 }
 
+//reset actual parttern to its default and move pattern index reward
 void Instrument::setPreviousInternalPattern()
 {
   resetCustomPatternToOriginal();
   patternIndex->reward();
 }
 
+//set step value 1/0
 void Instrument::setStep(uint16_t _step, uint16_t _val)
 {
   byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8]; //recover the active block for this step
@@ -113,12 +118,14 @@ void Instrument::setStep(uint16_t _step, uint16_t _val)
   blocks[instrumentIdentifyer][patternIndex->getValue()][getThisBlock] = getThisBlock;   //save block
 }
 
+//change gate lenght size from this instrument
 void Instrument::changeGateLenghSize(int8_t _change)
 {
   gateLenghtSize += (_change == 1) ? 1 : -1;
   gateLenghtSize = constrain(gateLenghtSize, 0, G_MAXGATELENGHTS);
 }
 
+//erase all instrument pattern 
 void Instrument::eraseInstrumentPattern()
 {
   //check if it is customizable
@@ -128,6 +135,7 @@ void Instrument::eraseInstrumentPattern()
     blocks[instrumentIdentifyer][patternIndex->getValue()][block] = 0;
 }
 
+//flags that this pattern will be customized
 void Instrument::customizeThisPattern()
 {
   //if this pattern isn´t customized
@@ -140,12 +148,14 @@ void Instrument::customizeThisPattern()
   // copyRefPatternToRefPattern(_instr, bkpPattern, customizedPattern[_instr]);
 }
 
+//copy patterns
 void Instrument::copyRefPatternToRefPattern(uint16_t _source, uint16_t _target)
 {
   for (uint8_t block = 0; block < G_MAXBLOCKS; block++)
     blocks[instrumentIdentifyer][_target][block] = blocks[instrumentIdentifyer][_source][block];
 }
 
+//go back this pattern to its original value
 void Instrument::resetCustomPatternToOriginal()
 {
   if (!customPattern) //if any pattern was customized , restore it from bkp before do anything
@@ -155,12 +165,14 @@ void Instrument::resetCustomPatternToOriginal()
   }
 }
 
+//clear all undo entries
 void Instrument::clearUndoArray()
 {
   for (uint16_t i = 0; i < maxUndos; i++)
     undoStack[i] = -1;
 }
 
+//add one undo operation
 void Instrument::addUndoStep(uint16_t _step)
 {
   for (uint16_t i = (maxUndos - 1); i > 0; i--)
@@ -168,6 +180,7 @@ void Instrument::addUndoStep(uint16_t _step)
   undoStack[0] = _step;
 }
 
+//rollback one undo operation
 void Instrument::rollbackUndoStep()
 {
   setStep(undoStack[0], 0); //remove tapped step
@@ -176,7 +189,7 @@ void Instrument::rollbackUndoStep()
   undoStack[(maxUndos - 1)] = -1;
 }
 
-//if there is any rollback available
+//if there is any rollback operation available
 uint16_t Instrument::undoAvailable()
 {
   return (undoStack[0] != -1);
@@ -213,11 +226,12 @@ boolean Instrument::undoLastTappedStep()
   return false;
 }
 
-byte Instrument::setBytePositionIntoByteBlock(byte byteBlock, byte _stepId)
-{
-  byte position = _stepId / 8;
-  return bitSet(byteBlock, position % 8);
-}
+//set one byte position inside a byte blobk
+// byte Instrument::setBytePositionIntoByteBlock(byte byteBlock, byte _stepId)
+// {
+//   byte position = _stepId / 8;
+//   return bitSet(byteBlock, position % 8);
+// }
 
 //legacy : convert old boolean arrays to new byte block arrays
 // void Instrument::legacyBooleanToByte()

@@ -139,23 +139,54 @@ void CVSequence::computeNewCVSequence()
 }
 
 //compute sub melodies : MIDI field
+// void CVSequence::computeSubCVSequence()
+// {
+//   uint8_t subCVSequenceMagicNumbers[7][2] = {{64, 0}, {32, 1}, {16, 1}, {8, 1}, {32, 4}, {16, 4}, {8, 4}}; //{loop size , key range}
+//   int8_t lastSection = 0;                                                                                  //starts with 0 to keep first section into KEY parameter
+//   int8_t filler = 0;                                                                                       //fills with 0 the first section to keep first section into KEY parameter
+//   int8_t lastfiller = filler;                                                                              //last valid filler
+//   for (uint8_t step = 0; step < G_MAXSTEPS; step++)
+//   {
+//     int8_t newSection = step / subCVSequenceMagicNumbers[parm_subseq->getValue()][0];
+//     if (lastSection != newSection)
+//     {
+//       lastSection = newSection;
+//       while (lastfiller == filler)
+//         filler = random(-subCVSequenceMagicNumbers[parm_subseq->getValue()][1], subCVSequenceMagicNumbers[parm_subseq->getValue()][1]);
+//       lastfiller = filler;
+//     }
+//     subCVSequence[step] = filler;
+//   }
+// }
+
+//compute sub melodies : MIDI field
 void CVSequence::computeSubCVSequence()
 {
-  uint8_t subCVSequenceMagicNumbers[7][2] = {{64, 0}, {32, 1}, {16, 1}, {8, 1}, {32, 4}, {16, 4}, {8, 4}}; //{loop size , key range}
-  int8_t lastSection = 0;                                                                                  //starts with 0 to keep first section into KEY parameter
-  int8_t filler = 0;                                                                                       //fills with 0 the first section to keep first section into KEY parameter
-  int8_t lastfiller = filler;                                                                              //last valid filler
-  for (uint8_t step = 0; step < G_MAXSTEPS; step++)
+  //{group quantity, steps per group , key range}
+  uint8_t rules[7][3] = {{1, 64, 0}, {2, 32, 1}, {4, 16, 1}, {8, 8, 1}, {2, 32, 4}, {4, 16, 4}, {8, 8, 4}};
+  int8_t filler = 0;     //fills with 0 the first section to keep first section into KEY parameter
+  int8_t lastfiller = 0; //last valid filler
+  for (uint8_t group = 0; group < rules[parm_subseq->getValue()][0]; group++)
   {
-    int8_t newSection = step / subCVSequenceMagicNumbers[parm_subseq->getValue()][0];
-    if (lastSection != newSection)
-    {
-      lastSection = newSection;
-      while (lastfiller == filler)
-        filler = random(-subCVSequenceMagicNumbers[parm_subseq->getValue()][1], subCVSequenceMagicNumbers[parm_subseq->getValue()][1]);
-      lastfiller = filler;
-    }
-    subCVSequence[step] = filler;
+    for (uint8_t step = 0; step < rules[parm_subseq->getValue()][1]; step++)
+      subCVSequence[group * rules[parm_subseq->getValue()][1] + step] = filler;
+    if (rules[parm_subseq->getValue()][2] != 0)
+      if (group < 4)
+      {
+        while (lastfiller == filler)
+          filler = random(-rules[parm_subseq->getValue()][2], rules[parm_subseq->getValue()][2]);
+        lastfiller = filler;
+      }
+      else
+      {
+        //last group, change or not the key
+        if ((group + 2) == rules[parm_subseq->getValue()][0] && random(1))
+        {
+          while (lastfiller == filler)
+            filler = random(-rules[parm_subseq->getValue()][2], rules[parm_subseq->getValue()][2]);
+          lastfiller = filler;
+        }
+      }
   }
 }
 

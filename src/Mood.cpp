@@ -67,7 +67,7 @@ void Mood::changeMaxMoods(uint16_t _max)
 void Mood::reset()
 {
   resetAllCustomPatternsToOriginal();
-  resetAllPermanentMute();
+  setAllPlayable(true);
   resetAllGateLenght();
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
@@ -96,23 +96,31 @@ void Mood::resetAllGateLenght()
     instruments[i]->gateLenghtSize = 0;
 }
 
-void Mood::resetAllPermanentMute()
+void Mood::setAllPlayable(boolean _status)
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    instruments[i]->permanentMute = 0;
-}
-
-int8_t Mood::getSoloInstrument()
-{
-  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    if (instruments[i]->solo)
-      return i;
-  return -1;
+    instruments[i]->permanentMute = !_status;
 }
 
 void Mood::setSoloInstrument(uint8_t instr)
 {
+
+  //change instrument solo status
+  instruments[instr]->solo = !instruments[instr]->solo;
+
+  //set it as solo
+  if (instruments[instr]->solo)
+  {
+    setAllPlayable(false);
+    instruments[instr]->permanentMute = false;
+  }
+  else
+  {
+    //enable all instruments
+    setAllPlayable(true);
+  }
+  //reset all instruments solo unless the choosen
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    instruments[i]->solo = false;
-  instruments[instr]->solo = true;
+    if (i != instr)
+      instruments[i]->solo = false;
 }

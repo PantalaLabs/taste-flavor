@@ -25,11 +25,10 @@ public:
   void discardNotXfadedInstrument(uint8_t _instr);
   void changeMaxMoods(uint16_t _max);
   void reset();
-  int8_t getSoloInstrument();
   void setSoloInstrument(uint8_t instr);
+  void setAllPlayable(boolean _status);
 
 private:
-  void resetAllPermanentMute();
   void resetAllGateLenght();
   void resetAllCustomPatternsToOriginal();
 };

@@ -129,8 +129,6 @@ boolean internalClockSource = true; //0=internal , 1=external
 
 EventDebounce switchBackToInternalClock(3000);
 
-int8_t soloInstrument;
-
 //sequencer
 volatile int8_t stepCount = 0;
 int8_t queuedRotaryEncoder = 0;
@@ -539,16 +537,10 @@ void ISRfireTimer4()
 
 #if DO_WT == true
     //play a sample if :
-    //if not solo + pattern ready + it wasnt manually muted
+    //if pattern ready + it wasnt manually muted
     //it was manually actioned together with laddermenu
     //if (mood[targetDeck]->instruments[instr]->playThisStep(stepCount) && (!instrActionState[instr] || (instrActionState[instr] && (laddderMenuOption < MAXPARAMETERS))))
-    if ((soloInstrument == -1) && (mood[targetDeck]->instruments[instr]->playThisStep(stepCount) && !instrActionState[instr]))
-    {
-      wTrig.trackGain(mood[targetDeck]->samples[instr]->getValue(), -6);
-      wTrig.trackLoad(mood[targetDeck]->samples[instr]->getValue());
-    }
-    //play only solo instrument
-    else if ((soloInstrument == instr) && (mood[targetDeck]->instruments[instr]->playThisStep(stepCount) && !instrActionState[instr]))
+    if (mood[targetDeck]->instruments[instr]->playThisStep(stepCount) && !instrActionState[instr])
     {
       wTrig.trackGain(mood[targetDeck]->samples[instr]->getValue(), -6);
       wTrig.trackLoad(mood[targetDeck]->samples[instr]->getValue());
@@ -739,8 +731,6 @@ void loop()
 {
   //read queued encoders
   processRotaryEncoder();
-
-  soloInstrument = mood[thisDeck]->getSoloInstrument();
 
   //ASYNC updates ==============================================================
   //flags if any display update will be necessary in this cycle
