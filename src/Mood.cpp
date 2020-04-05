@@ -13,8 +13,8 @@ Mood::Mood(uint16_t _maxMoods)
   Serial.print("Mood started.");
 #endif
 
-  id = new Counter(_maxMoods - 1);
-  id->setCyclable(false);
+  moodIndex = new Counter(_maxMoods - 1);
+  moodIndex->setCyclable(false);
 
   instruments[0] = new Instrument(0, G_INTERNALINSTR1PATTERNS);
   instruments[1] = new Instrument(1, G_INTERNALINSTR2PATTERNS);
@@ -38,28 +38,28 @@ Mood::Mood(uint16_t _maxMoods)
 void Mood::cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, uint8_t p5, uint8_t p6)
 {
   reset();
-  id->setValue(moodId);
+  moodIndex->setValue(moodId);
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     samples[i]->setValue((moodId * G_MAXINSTRUMENTS) + i);
-  instruments[0]->id->setValue(p1);
-  instruments[1]->id->setValue(p2);
-  instruments[2]->id->setValue(p3);
-  instruments[3]->id->setValue(p4);
-  instruments[4]->id->setValue(p5);
-  instruments[5]->id->setValue(p6);
+  instruments[0]->patternIndex->setValue(p1);
+  instruments[1]->patternIndex->setValue(p2);
+  instruments[2]->patternIndex->setValue(p3);
+  instruments[3]->patternIndex->setValue(p4);
+  instruments[4]->patternIndex->setValue(p5);
+  instruments[5]->patternIndex->setValue(p6);
 }
 
 void Mood::cueXfadedInstrument(uint16_t _instr, uint16_t _newSampleId, uint16_t _newPatternId, boolean _newMute, uint8_t _newLenght)
 {
   samples[_instr]->setValue(_newSampleId);
-  instruments[_instr]->id->setValue(_newPatternId);
+  instruments[_instr]->patternIndex->setValue(_newPatternId);
   instruments[_instr]->permanentMute = _newMute;
   instruments[_instr]->gateLenghtSize = _newLenght;
 }
 
 void Mood::changeMaxMoods(uint16_t _max)
 {
-  id->setEnd(_max - 1);
+  moodIndex->setEnd(_max - 1);
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     samples[i]->setEnd((_max * G_MAXINSTRUMENTS) - 1);
 }
@@ -72,14 +72,14 @@ void Mood::reset()
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
     samples[i]->reset();
-    instruments[i]->id->reset();
+    instruments[i]->patternIndex->reset();
   }
 }
 
 void Mood::discardNotXfadedInstrument(uint8_t _instr)
 {
   samples[_instr]->reset();
-  instruments[_instr]->id->reset();
+  instruments[_instr]->patternIndex->reset();
   instruments[_instr]->permanentMute = true;
   instruments[_instr]->gateLenghtSize = 0;
 }

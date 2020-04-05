@@ -21,8 +21,7 @@ class Instrument
 public:
   Instrument(uint16_t _instr, uint16_t _maxPatterns);
 
-  Counter *id;
-
+  Counter *patternIndex;
   uint16_t customPattern = 0;
   int8_t gateLenghtSize = 0;
   boolean permanentMute = 0;

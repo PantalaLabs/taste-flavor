@@ -16,7 +16,7 @@ class Mood
 {
 public:
   Mood(uint16_t _maxMoods);
-  Counter *id;
+  Counter *moodIndex;
   String name;
   Instrument *instruments[G_MAXGATELENGHTS];
   Counter *samples[G_MAXGATELENGHTS];

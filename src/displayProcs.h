@@ -108,7 +108,7 @@ void displayShowInstrPattern(uint8_t _instr, boolean _src)
     // if (((_src == ROM) && (originalPattern[_instr]->getStep(moodKitData[selectedMood][_instr], step))) ||
     //     ((_src == RAM) && (mood[thisDeck]->instruments[_instr]->getStep(mood[thisDeck]->instruments[_instr]->id->getValue(), step))))
     if (((_src == ROM) && (mood[thisDeck]->instruments[_instr]->getStep(moodKitData[selectedMood][_instr], step, ROM))) ||
-        ((_src == RAM) && (mood[thisDeck]->instruments[_instr]->getStep(mood[thisDeck]->instruments[_instr]->id->getValue(), step))))
+        ((_src == RAM) && (mood[thisDeck]->instruments[_instr]->getStep(mood[thisDeck]->instruments[_instr]->patternIndex->getValue(), step))))
       display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }

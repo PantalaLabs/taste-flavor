@@ -689,9 +689,9 @@ void processRotaryEncoder()
       else if (noOneEncoderButtonIsPressed())
       {
         if (encoderChange == -1)
-          mood[thisDeck]->instruments[_instrum]->id->reward();
+          mood[thisDeck]->instruments[_instrum]->patternIndex->reward();
         else
-          mood[thisDeck]->instruments[_instrum]->id->advance();
+          mood[thisDeck]->instruments[_instrum]->patternIndex->advance();
         flagUD_newPlayingPattern = _instrum; //flags to update this instrument on display
       }
     }
@@ -740,10 +740,6 @@ void loop()
   //read queued encoders
   processRotaryEncoder();
 
-  // #if DO_SERIAL == true
-  //   Serial.println(millis());
-  // #endif
-
   soloInstrument = mood[thisDeck]->getSoloInstrument();
 
   //ASYNC updates ==============================================================
@@ -789,7 +785,7 @@ void loop()
           mood[thisDeck]->cueXfadedInstrument(
               instr,
               mood[!thisDeck]->samples[instr]->getValue(),
-              mood[!thisDeck]->instruments[instr]->id->getValue(),
+              mood[!thisDeck]->instruments[instr]->patternIndex->getValue(),
               mood[!thisDeck]->instruments[instr]->permanentMute,
               mood[!thisDeck]->instruments[instr]->gateLenghtSize);
         }
@@ -823,7 +819,7 @@ void loop()
   {
     displayShowInstrPattern(flagUD_newPlayingPattern, RAM);
     displayUpdateLineArea(3, "Custom");
-    displayShowCornerInfo(0, mood[thisDeck]->instruments[flagUD_newPlayingPattern]->id->getValue());
+    displayShowCornerInfo(0, mood[thisDeck]->instruments[flagUD_newPlayingPattern]->patternIndex->getValue());
     updateDisplay = true;
     flagUD_newPlayingPattern = -1;
   }

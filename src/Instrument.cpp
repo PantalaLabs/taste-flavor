@@ -23,16 +23,16 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
   instrumentIdentifyer = _instr;
   maxPatterns = _maxPatterns;
 
-  id = new Counter(_maxPatterns);
+  patternIndex = new Counter(_maxPatterns);
   //add euclidean patterns to each pattern step
-  id = new Counter(_maxPatterns + G_MAXEUCLIDIANPATTERNS);
+  patternIndex = new Counter(_maxPatterns + G_MAXEUCLIDIANPATTERNS);
   for (byte pat = 0; pat < G_MAXEUCLIDIANPATTERNS; pat++)
     for (byte block = 0; block < G_MAXBLOCKS; block++)
       blocks[instrumentIdentifyer][_maxPatterns + 1 + pat][block] = euclidpatterntable[pat][block];
 
-  id->setInit(1);
-  id->setCyclable(false);
-  id->reset();
+  patternIndex->setInit(1);
+  patternIndex->setCyclable(false);
+  patternIndex->reset();
 
 #if DO_SD == true
   sdc = new SdComm(SD_CS, true);
@@ -76,7 +76,7 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 //return _step from the actual pattern
 boolean Instrument::getStep(uint16_t _step)
 {
-  byte getThisBlock = blocks[instrumentIdentifyer][id->getValue()][_step / 8];
+  byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
   return bitRead(getThisBlock, 7 - (_step % 8));
 }
 
@@ -97,20 +97,20 @@ boolean Instrument::getStep(uint16_t _pat, uint16_t _step, boolean _src)
 void Instrument::setNextInternalPattern()
 {
   resetCustomPatternToOriginal();
-  id->advance();
+  patternIndex->advance();
 }
 
 void Instrument::setPreviousInternalPattern()
 {
   resetCustomPatternToOriginal();
-  id->reward();
+  patternIndex->reward();
 }
 
 void Instrument::setStep(uint16_t _step, uint16_t _val)
 {
-  byte getThisBlock = blocks[instrumentIdentifyer][id->getValue()][_step / 8]; //recover the active block for this step
+  byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8]; //recover the active block for this step
   bitSet(getThisBlock, 7 - (_step % 8)) = (_val == 1) ? 1 : 0;                 //set inverting the significant step
-  blocks[instrumentIdentifyer][id->getValue()][getThisBlock] = getThisBlock;   //save block
+  blocks[instrumentIdentifyer][patternIndex->getValue()][getThisBlock] = getThisBlock;   //save block
 }
 
 void Instrument::changeGateLenghSize(int8_t _change)
@@ -125,7 +125,7 @@ void Instrument::eraseInstrumentPattern()
   customizeThisPattern();
   //clear actual pattern
   for (int8_t block = 0; block < G_MAXBLOCKS; block++)
-    blocks[instrumentIdentifyer][id->getValue()][block] = 0;
+    blocks[instrumentIdentifyer][patternIndex->getValue()][block] = 0;
 }
 
 void Instrument::customizeThisPattern()
@@ -133,8 +133,8 @@ void Instrument::customizeThisPattern()
   //if this pattern isn´t customized
   if (customPattern == 0)
   {
-    copyRefPatternToRefPattern(id->getValue(), bkpPattern); //bkp it to safe area
-    customPattern = id->getValue();                         //set asked pattern as BKPd
+    copyRefPatternToRefPattern(patternIndex->getValue(), bkpPattern); //bkp it to safe area
+    customPattern = patternIndex->getValue();                         //set asked pattern as BKPd
   }
   //restore it to original state before make any other customization ???
   // copyRefPatternToRefPattern(_instr, bkpPattern, customizedPattern[_instr]);
