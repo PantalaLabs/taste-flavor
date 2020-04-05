@@ -9,15 +9,19 @@
 
 Mood::Mood(uint16_t _maxMoods)
 {
+#if DO_SERIAL == true
+  Serial.print("Mood started.");
+#endif
+
   id = new Counter(_maxMoods - 1);
   id->setCyclable(false);
 
-  patterns[0] = new Pattern(0, G_INTERNALINSTR1PATTERNS);
-  patterns[1] = new Pattern(1, G_INTERNALINSTR2PATTERNS);
-  patterns[2] = new Pattern(2, G_INTERNALINSTR3PATTERNS);
-  patterns[3] = new Pattern(3, G_INTERNALINSTR4PATTERNS);
-  patterns[4] = new Pattern(4, G_INTERNALINSTR5PATTERNS);
-  patterns[5] = new Pattern(5, G_INTERNALINSTR6PATTERNS);
+  instruments[0] = new Instrument(0, G_INTERNALINSTR1PATTERNS);
+  instruments[1] = new Instrument(1, G_INTERNALINSTR2PATTERNS);
+  instruments[2] = new Instrument(2, G_INTERNALINSTR3PATTERNS);
+  instruments[3] = new Instrument(3, G_INTERNALINSTR4PATTERNS);
+  instruments[4] = new Instrument(4, G_INTERNALINSTR5PATTERNS);
+  instruments[5] = new Instrument(5, G_INTERNALINSTR6PATTERNS);
 
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
@@ -25,6 +29,9 @@ Mood::Mood(uint16_t _maxMoods)
     samples[i]->setCyclable(false);
     samples[i]->reset();
   }
+#if DO_SERIAL == true
+  Serial.println("Mood created.");
+#endif
 }
 
 //PUBLIC----------------------------------------------------------------------------------------------
@@ -34,22 +41,21 @@ void Mood::cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, u
   id->setValue(moodId);
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     samples[i]->setValue((moodId * G_MAXINSTRUMENTS) + i);
-  patterns[0]->id->setValue(p1);
-  patterns[1]->id->setValue(p2);
-  patterns[2]->id->setValue(p3);
-  patterns[3]->id->setValue(p4);
-  patterns[4]->id->setValue(p5);
-  patterns[5]->id->setValue(p6);
+  instruments[0]->id->setValue(p1);
+  instruments[1]->id->setValue(p2);
+  instruments[2]->id->setValue(p3);
+  instruments[3]->id->setValue(p4);
+  instruments[4]->id->setValue(p5);
+  instruments[5]->id->setValue(p6);
 }
 
-void Mood::cueXfadedInstrument(uint16_t _instr,uint16_t  _newSampleId,uint16_t  _newPatternId,boolean _newMute, uint8_t _newLenght)
+void Mood::cueXfadedInstrument(uint16_t _instr, uint16_t _newSampleId, uint16_t _newPatternId, boolean _newMute, uint8_t _newLenght)
 {
   samples[_instr]->setValue(_newSampleId);
-  patterns[_instr]->id->setValue(_newPatternId);
-  patterns[_instr]->permanentMute = _newMute;
-  patterns[_instr]->gateLenghtSize = _newLenght;
+  instruments[_instr]->id->setValue(_newPatternId);
+  instruments[_instr]->permanentMute = _newMute;
+  instruments[_instr]->gateLenghtSize = _newLenght;
 }
-
 
 void Mood::changeMaxMoods(uint16_t _max)
 {
@@ -66,32 +72,47 @@ void Mood::reset()
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
     samples[i]->reset();
-    patterns[i]->id->reset();
+    instruments[i]->id->reset();
   }
 }
 
 void Mood::discardNotXfadedInstrument(uint8_t _instr)
 {
   samples[_instr]->reset();
-  patterns[_instr]->id->reset();
-  patterns[_instr]->permanentMute = true;
-  patterns[_instr]->gateLenghtSize = 0;
+  instruments[_instr]->id->reset();
+  instruments[_instr]->permanentMute = true;
+  instruments[_instr]->gateLenghtSize = 0;
 }
 
 void Mood::resetAllCustomPatternsToOriginal()
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    patterns[i]->resetCustomPatternToOriginal();
+    instruments[i]->resetCustomPatternToOriginal();
 }
 
 void Mood::resetAllGateLenght()
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    patterns[i]->gateLenghtSize = 0;
+    instruments[i]->gateLenghtSize = 0;
 }
 
 void Mood::resetAllPermanentMute()
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    patterns[i]->permanentMute = 0;
+    instruments[i]->permanentMute = 0;
+}
+
+int8_t Mood::getSoloInstrument()
+{
+  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+    if (instruments[i]->solo)
+      return i;
+  return -1;
+}
+
+void Mood::setSoloInstrument(uint8_t instr)
+{
+  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+    instruments[i]->solo = false;
+  instruments[instr]->solo = true;
 }

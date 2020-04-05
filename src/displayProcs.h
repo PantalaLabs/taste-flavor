@@ -71,7 +71,7 @@ void displayShowCornerInfo(uint8_t _parm, int16_t _val) //update display right u
     display.print(_val);
     break;
   case 4:
-    display.print((G_DEFAULTGATELENGHT + (mood[crossfadedDeck(_val)]->patterns[_val]->gateLenghtSize * G_EXTENDEDGATELENGHT)) / 1000);
+    display.print((G_DEFAULTGATELENGHT + (mood[crossfadedDeck(_val)]->instruments[_val]->gateLenghtSize * G_EXTENDEDGATELENGHT)) / 1000);
   }
 }
 
@@ -106,9 +106,9 @@ void displayShowInstrPattern(uint8_t _instr, boolean _src)
   {
     //if browsed mood (ROM) or individual pattern browse (RAM)
     // if (((_src == ROM) && (originalPattern[_instr]->getStep(moodKitData[selectedMood][_instr], step))) ||
-    //     ((_src == RAM) && (mood[thisDeck]->patterns[_instr]->getStep(mood[thisDeck]->patterns[_instr]->id->getValue(), step))))
-    if (((_src == ROM) && (mood[thisDeck]->patterns[_instr]->getStep(moodKitData[selectedMood][_instr], step, ROM))) ||
-        ((_src == RAM) && (mood[thisDeck]->patterns[_instr]->getStep(mood[thisDeck]->patterns[_instr]->id->getValue(), step))))
+    //     ((_src == RAM) && (mood[thisDeck]->instruments[_instr]->getStep(mood[thisDeck]->instruments[_instr]->id->getValue(), step))))
+    if (((_src == ROM) && (mood[thisDeck]->instruments[_instr]->getStep(moodKitData[selectedMood][_instr], step, ROM))) ||
+        ((_src == RAM) && (mood[thisDeck]->instruments[_instr]->getStep(mood[thisDeck]->instruments[_instr]->id->getValue(), step))))
       display.fillRect(step * 2, DOTGRIDINIT + (_instr * GRIDPATTERNHEIGHT), 2, GRIDPATTERNHEIGHT - 1, WHITE);
   }
 }

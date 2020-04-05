@@ -77,14 +77,14 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define SD_CS 39
 
 //=======================analog pins=======================
-#define G_LADDERMENUPIN A0   //laddr menu
-#define G_MELODYPARAMPIN0 A1 //melody parameters
-#define G_MELODYPARAMPIN1 A2
-#define G_MELODYPARAMPIN2 A3
-#define G_MELODYPARAMPIN3 A4
-#define G_MELODYPARAMPIN4 A5
-#define G_MELODYPARAMPIN5 A6
-#define G_MELODYPARAMPIN6 A7
-#define G_MELODYPARAMPIN7 A8
+#define G_LADDERMENUPIN A0  //laddr menu
+#define G_CVSEQPARAMPIN0 A1 //melody parameters
+#define G_CVSEQPARAMPIN1 A2
+#define G_CVSEQPARAMPIN2 A3
+#define G_CVSEQPARAMPIN3 A4
+#define G_CVSEQPARAMPIN4 A5
+#define G_CVSEQPARAMPIN5 A6
+#define G_CVSEQPARAMPIN6 A7
+#define G_CVSEQPARAMPIN7 A8
 
 #endif
