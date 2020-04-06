@@ -62,15 +62,15 @@ int laddderMenuSeparators[MAXPARAMETERS + 1] = {30, 140, 290, 490, 620, 750, 840
 EventDebounce laddderMenuReadInterval(100);
 
 //time related and bpm
-volatile uint32_t u_lastTick;                   //last time tick was called
-volatile uint32_t u_tickInterval = 1000000;     //tick interval
-volatile uint32_t safeZoneEndTime;              //safe time zone
+volatile uint32_t u_lastTick;                //last time tick was called
+volatile uint32_t u_tickInterval = 1000000;  //tick interval
+volatile uint32_t safeZoneEndTime;           //safe time zone
 bool updateDisplayUpdateLatencyComp = false; //flag to update latency compensation
-int32_t u_LatencyComp = 1100;                   //default latency compensation keep the 100 microsseconds there
-int32_t u_LatencyCompStep = 1000;               //latency compensation amount update step
-#define u_LatencyCompLimit 20000                //latency compensation + and - limit
-uint16_t bpm = 125;                             //actual bpm in bpm
-uint32_t u_bpm = 0;                             //actual bpm value in us
+int32_t u_LatencyComp = 1100;                //default latency compensation keep the 100 microsseconds there
+const int32_t u_LatencyCompStep = 1000;      //latency compensation amount update step
+#define u_LatencyCompLimit 20000             //latency compensation + and - limit
+uint16_t bpm = 125;                          //actual bpm in bpm
+uint32_t u_bpm = 0;                          //actual bpm value in us
 
 //encoders buttons : mood, cross, instruments
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
@@ -112,9 +112,9 @@ int16_t selectedMood = 0;                //actual selected mood
 int16_t lastSelectedMood = 255;          //prevents to execute 2 times the same action
 int16_t previousMoodname = 0;            //previous mood name
 int8_t lastCrossBarGraphValue = 127;     //0 to G_MAXINSTRUMENTS possible values
-bool flagUD_browseThisMood = false;   //schedule some display update
-bool flagUD_newMoodSelected = false;  //schedule some display update
-bool flagUD_newBpmValue = false;      //update bpm
+bool flagUD_browseThisMood = false;      //schedule some display update
+bool flagUD_newMoodSelected = false;     //schedule some display update
+bool flagUD_newBpmValue = false;         //update bpm
 int8_t flagUD_newCrossfaderPosition = 0; //schedule some display update
 int8_t flagUD_newPlayingPattern = -1;    //update only one instrument pattern
 int8_t flagUD_newPlayingSample = -1;     //update sample on rasp pi
@@ -122,7 +122,7 @@ int8_t flagUD_newGateLenght = -1;        //update gate lenght on right upper cor
 int8_t flagUD_eraseThisPattern = -1;     //erase selected pattern
 int8_t flagUD_tapNewStep = -1;           //tap new step
 int8_t flagUD_rollbackTappedStep = -1;   //undo tapped step
-bool flagUD_newClockSource = false;   //changes clock source
+bool flagUD_newClockSource = false;      //changes clock source
 
 bool defaultDisplayNotActiveYet = true;
 bool internalClockSource = true; //0=internal , 1=external
@@ -156,31 +156,33 @@ char *moodKitName[G_MAXMEMORYMOODS] = {
     "Fab.Pecanha-Groove 6",
     "Fab.Pecanha-Groove 7",
     "Fab.Pecanha-Groove 8",
+    "P.Labs-Miami 1",
 };
 //{pattern id, pattern id, pattern id, pattern id, pattern id, pattern id, absolute volume reduction}
 //reserved SWITCH = 0
 //reserved MUTE = 1
 uint16_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
-    {1, 1, 1, 1, 1, 1},    //reserved MUTE = 1
-    {2, 2, 2, 2, 2, 2},    //P.Labs-Empty Room
-    {2, 3, 3, 4, 3, 1},    //P.Labs-Choke
-    {2, 3, 4, 2, 3, 1},    //P.Labs-April23
-    {2, 5, 5, 2, 5, 4},    //Carlos Pires-Drama
-    {2, 6, 5, 6, 6, 1},    //P.Labs-Fat Cortex
-    {2, 4, 6, 4, 7, 5},    //P.Labs-Straight Lane
-    {2, 3, 7, 2, 3, 2},    //P.Labs-Chained
-    {3, 7, 8, 4, 4, 6},    //P.Labs-EasyBreak
-    {2, 8, 9, 5, 8, 7},    //Edu M-Crispy Mood
-    {3, 9, 10, 4, 6, 3},   //Plabs-Dbl Bass
-    {4, 4, 3, 5, 1, 1},    //Plabs-Melotech
-    {2, 10, 3, 4, 2, 8},   //Fab.Pecanha-Groove1
-    {2, 11, 3, 4, 9, 9},   //Fab.Pecanha-Groove2
-    {2, 8, 3, 4, 10, 10},  //Fab.Pecanha-Groove3
-    {2, 11, 3, 4, 9, 11},  //Fab.Pecanha-Groove4
-    {2, 12, 11, 2, 3, 12}, //Fab.Pecanha-Groove5
-    {2, 8, 3, 7, 3, 6},    //Fab.Pecanha-Groove6
-    {2, 13, 3, 4, 11, 9},  //Fab.Pecanha-Groove7
-    {2, 14, 3, 10, 3, 13}  //Fab.Pecanha-Groove8
+    {1, 1, 1, 1, 1, 1},     //reserved MUTE = 1
+    {2, 2, 2, 2, 2, 2},     //P.Labs-Empty Room
+    {2, 3, 3, 4, 3, 1},     //P.Labs-Choke
+    {2, 3, 4, 2, 3, 1},     //P.Labs-April23
+    {2, 5, 5, 2, 5, 4},     //Carlos Pires-Drama
+    {2, 6, 5, 6, 6, 1},     //P.Labs-Fat Cortex
+    {2, 4, 6, 4, 7, 5},     //P.Labs-Straight Lane
+    {2, 3, 7, 2, 3, 2},     //P.Labs-Chained
+    {3, 7, 8, 4, 4, 6},     //P.Labs-EasyBreak
+    {2, 8, 9, 5, 8, 7},     //Edu M-Crispy Mood
+    {3, 9, 10, 4, 6, 3},    //Plabs-Dbl Bass
+    {4, 4, 3, 5, 1, 1},     //Plabs-Melotech
+    {2, 10, 3, 4, 2, 8},    //Fab.Pecanha-Groove1
+    {2, 11, 3, 4, 9, 9},    //Fab.Pecanha-Groove2
+    {2, 8, 3, 4, 10, 10},   //Fab.Pecanha-Groove3
+    {2, 11, 3, 4, 9, 11},   //Fab.Pecanha-Groove4
+    {2, 12, 11, 2, 3, 12},  //Fab.Pecanha-Groove5
+    {2, 8, 3, 7, 3, 6},     //Fab.Pecanha-Groove6
+    {2, 13, 3, 4, 11, 9},   //Fab.Pecanha-Groove7
+    {2, 14, 3, 10, 3, 13},  //Fab.Pecanha-Groove8
+    {5, 15, 12, 11, 12, 1}, //P.Labs-Miami 1
 };
 
 //decks
@@ -563,14 +565,20 @@ void ISRfireTimer4()
     trigOutPattern.start();
   stepCount++;
   if (stepCount >= G_MAXSTEPS)
-    ISRresetSeq();
+  {
+    stepCount = 0;
+    cvseq->resetStepCounter(u_LatencyComp);
+  }
   safeZoneEndTime = (micros() + u_tickInterval - DISPLAYUPDATETIME);
 }
 
 void ISRresetSeq()
 {
-  stepCount = 0;
-  cvseq->resetStepCounter();
+  if (u_LatencyComp >= 0)
+    stepCount = 0;
+  else
+    stepCount = 1;
+  cvseq->resetStepCounter(u_LatencyComp);
 }
 
 //close all trigger

@@ -16,21 +16,21 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define MOODENCODER 0  //MOOD encoder id
 #define CROSSENCODER 1 //CROSS encoder id
 
-#define RAM 0                //changeble patterns
-#define ROM 1                //original reference patterns
-#define G_MAXINSTRUMENTS 6   //total of instruments
-#define G_MAXSTEPS 64        //max step sequence
-#define G_MAXBLOCKS 8        //max step sequence blocks of 8 steps
-#define G_MAXGATELENGHTS 8   //max number of different gatelenghts
+#define RAM 0              //changeble patterns
+#define ROM 1              //original reference patterns
+#define G_MAXINSTRUMENTS 6 //total of instruments
+#define G_MAXSTEPS 64      //max step sequence
+#define G_MAXBLOCKS 8      //max step sequence blocks of 8 steps
+#define G_MAXGATELENGHTS 8 //max number of different gatelenghts
 #define G_MAXEUCLIDIANPATTERNS 26
 
 #define G_MAXMEMORYMOODS 300 //max number of moods
-#define G_INTERNALMOODS 20   //internal moods
-#define G_INTERNALINSTR1PATTERNS 4
-#define G_INTERNALINSTR2PATTERNS 14
-#define G_INTERNALINSTR3PATTERNS 11
-#define G_INTERNALINSTR4PATTERNS 10
-#define G_INTERNALINSTR5PATTERNS 11
+#define G_INTERNALMOODS 21   //internal moods
+#define G_INTERNALINSTR1PATTERNS 5
+#define G_INTERNALINSTR2PATTERNS 15
+#define G_INTERNALINSTR3PATTERNS 12
+#define G_INTERNALINSTR4PATTERNS 11
+#define G_INTERNALINSTR5PATTERNS 12
 #define G_INTERNALINSTR6PATTERNS 13
 #define G_DEFAULTGATELENGHT 5000   //first gatelenght in ms
 #define G_EXTENDEDGATELENGHT 40000 //gate lenght size increment

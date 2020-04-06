@@ -97,9 +97,12 @@ int8_t CVSequence::applyFilter(int8_t _note, bool _type)
   return _note;
 }
 
-void CVSequence::resetStepCounter()
+void CVSequence::resetStepCounter(int32_t _ref)
 {
-  stepCounter = 0;
+  if (_ref > 0)
+    stepCounter = 0;
+  else
+    stepCounter = 1;
 }
 
 bool CVSequence::readNewParameter()

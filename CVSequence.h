@@ -30,7 +30,7 @@ public:
   bool readNewParameter();
   uint16_t getNote();
   uint16_t getSubNote();
-  void resetStepCounter();
+  void resetStepCounter(int32_t _ref);
   void computeNewCVSequence();
 
 private:
