@@ -18,7 +18,7 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 
 //decks
 Mood *mood[2];
-boolean thisDeck = 0;
+bool thisDeck = 0;
 
 #if DO_WT == true
 #include <wavTrigger.h>
@@ -62,23 +62,23 @@ int laddderMenuSeparators[MAXPARAMETERS + 1] = {30, 140, 290, 490, 620, 750, 840
 EventDebounce laddderMenuReadInterval(100);
 
 //time related and bpm
-volatile uint32_t u_lastTick;                   //last time tick was called
-volatile uint32_t u_tickInterval = 1000000;     //tick interval
-volatile uint32_t safeZoneEndTime;              //safe time zone
-boolean updateDisplayUpdateLatencyComp = false; //flag to update latency compensation
-int32_t u_LatencyComp = 1100;                   //default latency compensation keep the 100 microsseconds there
-int32_t u_LatencyCompStep = 1000;               //latency compensation amount update step
-#define u_LatencyCompLimit 20000                //latency compensation + and - limit
-uint16_t bpm = 125;                             //actual bpm in bpm
-uint32_t u_bpm = 0;                             //actual bpm value in us
+volatile uint32_t u_lastTick;                //last time tick was called
+volatile uint32_t u_tickInterval = 1000000;  //tick interval
+volatile uint32_t safeZoneEndTime;           //safe time zone
+bool updateDisplayUpdateLatencyComp = false; //flag to update latency compensation
+int32_t u_LatencyComp = 1100;                //default latency compensation keep the 100 microsseconds there
+const int32_t u_LatencyCompStep = 1000;      //latency compensation amount update step
+#define u_LatencyCompLimit 20000             //latency compensation + and - limit
+uint16_t bpm = 125;                          //actual bpm in bpm
+uint32_t u_bpm = 0;                          //actual bpm value in us
 
 //encoders buttons : mood, cross, instruments
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
-boolean encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
+bool encoderButtonState[MAXENCODERS] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 //action pins
 uint8_t instrActionPins[G_MAXINSTRUMENTS] = {ACTIONPININSTR1, ACTIONPININSTR2, ACTIONPININSTR3, ACTIONPININSTR4, ACTIONPININSTR5, ACTIONPININSTR6}; //pins
-boolean instrActionState[G_MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
+bool instrActionState[G_MAXINSTRUMENTS] = {0, 0, 0, 0, 0, 0};
 
 EventDebounce instrActionDebounce1(200);
 EventDebounce instrActionDebounce2(200);
@@ -112,9 +112,9 @@ int16_t selectedMood = 0;                //actual selected mood
 int16_t lastSelectedMood = 255;          //prevents to execute 2 times the same action
 int16_t previousMoodname = 0;            //previous mood name
 int8_t lastCrossBarGraphValue = 127;     //0 to G_MAXINSTRUMENTS possible values
-boolean flagUD_browseThisMood = false;   //schedule some display update
-boolean flagUD_newMoodSelected = false;  //schedule some display update
-boolean flagUD_newBpmValue = false;      //update bpm
+bool flagUD_browseThisMood = false;      //schedule some display update
+bool flagUD_newMoodSelected = false;     //schedule some display update
+bool flagUD_newBpmValue = false;         //update bpm
 int8_t flagUD_newCrossfaderPosition = 0; //schedule some display update
 int8_t flagUD_newPlayingPattern = -1;    //update only one instrument pattern
 int8_t flagUD_newPlayingSample = -1;     //update sample on rasp pi
@@ -122,10 +122,10 @@ int8_t flagUD_newGateLenght = -1;        //update gate lenght on right upper cor
 int8_t flagUD_eraseThisPattern = -1;     //erase selected pattern
 int8_t flagUD_tapNewStep = -1;           //tap new step
 int8_t flagUD_rollbackTappedStep = -1;   //undo tapped step
-boolean flagUD_newClockSource = false;   //changes clock source
+bool flagUD_newClockSource = false;      //changes clock source
 
-boolean defaultDisplayNotActiveYet = true;
-boolean internalClockSource = true; //0=internal , 1=external
+bool defaultDisplayNotActiveYet = true;
+bool internalClockSource = true; //0=internal , 1=external
 
 EventDebounce switchBackToInternalClock(3000);
 
@@ -148,39 +148,41 @@ char *moodKitName[G_MAXMEMORYMOODS] = {
     "Edu M-Crispy Mood",
     "P.Labs-Dbl Bass",
     "P.Labs-Melotech",
-    "Fab.Pecanha-Groove1",
-    "Fab.Pecanha-Groove2",
-    "Fab.Pecanha-Groove3",
-    "Fab.Pecanha-Groove4",
-    "Fab.Pecanha-Groove5",
-    "Fab.Pecanha-Groove6",
-    "Fab.Pecanha-Groove7",
-    "Fab.Pecanha-Groove8",
+    "Fab.Pecanha-Groove 1",
+    "Fab.Pecanha-Groove 2",
+    "Fab.Pecanha-Groove 3",
+    "Fab.Pecanha-Groove 4",
+    "Fab.Pecanha-Groove 5",
+    "Fab.Pecanha-Groove 6",
+    "Fab.Pecanha-Groove 7",
+    "Fab.Pecanha-Groove 8",
+    "P.Labs-Miami 1",
 };
 //{pattern id, pattern id, pattern id, pattern id, pattern id, pattern id, absolute volume reduction}
 //reserved SWITCH = 0
 //reserved MUTE = 1
 uint16_t moodKitData[G_MAXMEMORYMOODS][G_MAXINSTRUMENTS] = {
-    {1, 1, 1, 1, 1, 1},    //reserved MUTE = 1
-    {2, 2, 2, 2, 2, 2},    //P.Labs-Empty Room
-    {2, 3, 3, 4, 3, 1},    //P.Labs-Choke
-    {2, 3, 4, 2, 3, 1},    //P.Labs-April23
-    {2, 5, 5, 2, 5, 4},    //Carlos Pires-Drama
-    {2, 6, 5, 6, 6, 1},    //P.Labs-Fat Cortex
-    {2, 4, 6, 4, 7, 5},    //P.Labs-Straight Lane
-    {2, 3, 7, 2, 3, 2},    //P.Labs-Chained
-    {3, 7, 8, 4, 4, 6},    //P.Labs-EasyBreak
-    {2, 8, 9, 5, 8, 7},    //Edu M-Crispy Mood
-    {3, 9, 10, 4, 6, 3},   //Plabs-Dbl Bass
-    {4, 4, 3, 5, 1, 1},    //Plabs-Melotech
-    {2, 10, 3, 4, 2, 8},   //Fab.Pecanha-Groove1
-    {2, 11, 3, 4, 9, 9},   //Fab.Pecanha-Groove2
-    {2, 8, 3, 4, 10, 10},  //Fab.Pecanha-Groove3
-    {2, 11, 3, 4, 9, 11},  //Fab.Pecanha-Groove4
-    {2, 12, 11, 2, 3, 12}, //Fab.Pecanha-Groove5
-    {2, 8, 3, 7, 3, 6},    //Fab.Pecanha-Groove6
-    {2, 13, 3, 4, 11, 9},  //Fab.Pecanha-Groove7
-    {2, 14, 3, 10, 3, 13}  //Fab.Pecanha-Groove8
+    {1, 1, 1, 1, 1, 1},     //reserved MUTE = 1
+    {2, 2, 2, 2, 2, 2},     //P.Labs-Empty Room
+    {2, 3, 3, 4, 3, 1},     //P.Labs-Choke
+    {2, 3, 4, 2, 3, 1},     //P.Labs-April23
+    {2, 5, 5, 2, 5, 4},     //Carlos Pires-Drama
+    {2, 6, 5, 6, 6, 1},     //P.Labs-Fat Cortex
+    {2, 4, 6, 4, 7, 5},     //P.Labs-Straight Lane
+    {2, 3, 7, 2, 3, 2},     //P.Labs-Chained
+    {3, 7, 8, 4, 4, 6},     //P.Labs-EasyBreak
+    {2, 8, 9, 5, 8, 7},     //Edu M-Crispy Mood
+    {3, 9, 10, 4, 6, 3},    //Plabs-Dbl Bass
+    {4, 4, 3, 5, 1, 1},     //Plabs-Melotech
+    {2, 10, 3, 4, 2, 8},    //Fab.Pecanha-Groove1
+    {2, 11, 3, 4, 9, 9},    //Fab.Pecanha-Groove2
+    {2, 8, 3, 4, 10, 10},   //Fab.Pecanha-Groove3
+    {2, 11, 3, 4, 9, 11},   //Fab.Pecanha-Groove4
+    {2, 12, 11, 2, 3, 12},  //Fab.Pecanha-Groove5
+    {2, 8, 3, 7, 3, 6},     //Fab.Pecanha-Groove6
+    {2, 13, 3, 4, 11, 9},   //Fab.Pecanha-Groove7
+    {2, 14, 3, 10, 3, 13},  //Fab.Pecanha-Groove8
+    {5, 15, 12, 11, 12, 1}, //P.Labs-Miami 1
 };
 
 //decks
@@ -339,14 +341,14 @@ void setup()
   mood[0] = new Mood(G_INTERNALMOODS);
   mood[1] = new Mood(G_INTERNALMOODS);
 
-  //legacy : convert old boolean arrays to new byte block arrays
-  // mood[0]->instruments[0]->convertBooleanToByte1();
-  // mood[0]->instruments[1]->convertBooleanToByte1();
-  // mood[0]->instruments[2]->convertBooleanToByte1();
-  // mood[0]->instruments[3]->convertBooleanToByte1();
-  // mood[0]->instruments[4]->convertBooleanToByte1();
-  // mood[0]->instruments[5]->convertBooleanToByte1();
-  //mood[0]->instruments[0]->legacyEuclidBooleanToByte();
+  //legacy : convert old bool arrays to new byte block arrays
+  // mood[0]->instruments[0]->convertboolToByte1();
+  // mood[0]->instruments[1]->convertboolToByte1();
+  // mood[0]->instruments[2]->convertboolToByte1();
+  // mood[0]->instruments[3]->convertboolToByte1();
+  // mood[0]->instruments[4]->convertboolToByte1();
+  // mood[0]->instruments[5]->convertboolToByte1();
+  //mood[0]->instruments[0]->legacyEuclidboolToByte();
   // calcE(2, 3);
   // printE();
   // calcE(2, 4);
@@ -532,7 +534,7 @@ void ISRfireTimer4()
 
   for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++) //for each instrument
   {
-    boolean targetDeck;
+    bool targetDeck;
     targetDeck = crossfadedDeck(instr);
 
 #if DO_WT == true
@@ -563,14 +565,20 @@ void ISRfireTimer4()
     trigOutPattern.start();
   stepCount++;
   if (stepCount >= G_MAXSTEPS)
-    ISRresetSeq();
+  {
+    stepCount = 0;
+    cvseq->resetStepCounter(u_LatencyComp);
+  }
   safeZoneEndTime = (micros() + u_tickInterval - DISPLAYUPDATETIME);
 }
 
 void ISRresetSeq()
 {
-  stepCount = 0;
-  cvseq->resetStepCounter();
+  if (u_LatencyComp >= 0)
+    stepCount = 0;
+  else
+    stepCount = 1;
+  cvseq->resetStepCounter(u_LatencyComp);
 }
 
 //close all trigger
@@ -600,13 +608,13 @@ void ISRendTriggers()
 
 //allows to change samples only upo to after 2/3 of the tick interval
 //to avoid to change sample the same time it was triggered
-boolean safeZone()
+bool safeZone()
 {
   return (micros() < safeZoneEndTime);
 }
 
 //return if this instrument belongs to this or not to this deck
-boolean crossfadedDeck(uint8_t _instr)
+bool crossfadedDeck(uint8_t _instr)
 {
   return (_instr < crossfader) ? thisDeck : !thisDeck;
 }
@@ -691,7 +699,7 @@ void processRotaryEncoder()
 }
 
 //verify if NO ONE encoder button is pressed
-boolean noOneEncoderButtonIsPressed()
+bool noOneEncoderButtonIsPressed()
 {
   for (uint8_t i = 0; i < MAXENCODERS; i++) //search all encoder buttons
     if (encoderButtonState[i])              //it is pressed
@@ -701,7 +709,7 @@ boolean noOneEncoderButtonIsPressed()
 }
 
 //verify if ONLY ONE encoder button is pressed
-boolean onlyOneEncoderButtonIsPressed(uint8_t _target)
+bool onlyOneEncoderButtonIsPressed(uint8_t _target)
 {
   if (!encoderButtonState[_target]) //if asked button is not pressed
     return false;
@@ -713,7 +721,7 @@ boolean onlyOneEncoderButtonIsPressed(uint8_t _target)
 }
 
 //verify if TWO encoder button is pressed
-boolean twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
+bool twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 {
   if (encoderButtonState[_target1] && encoderButtonState[_target2]) //if two asked buttons are pressed
   {
@@ -734,7 +742,7 @@ void loop()
 
   //ASYNC updates ==============================================================
   //flags if any display update will be necessary in this cycle
-  boolean updateDisplay = false;
+  bool updateDisplay = false;
   //mood browse
   if (flagUD_browseThisMood)
   {
@@ -886,7 +894,7 @@ void loop()
   //SYNCd updates ==============================================================
   if (interfaceEvent.debounced())
   {
-    //read all encoders buttons (invert boolean state to make it easyer for compararison)
+    //read all encoders buttons (invert bool state to make it easyer for compararison)
     for (int8_t i = 0; i < MAXENCODERS; i++)
     {
       encoderButtonState[i] = !digitalRead(encoderButtonPins[i]);
@@ -920,15 +928,21 @@ void loop()
   //all action (mute) buttons ===============================================================
   for (int8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
-    //read action instrument button (invert boolean state to make easy comparation)
+    //read action instrument button (invert bool state to make easy comparation)
     instrActionState[i] = !digitalRead(instrActionPins[i]);
     //if interface available and action button pressed
     if (instrActionDebounceArray[i].debounced() && instrActionState[i])
     {
-      boolean makeDebounce = false;
+      uint16_t makeDebounce = 0;
       //selected ladder menu option
       switch (laddderMenuOption)
       {
+      case COMMANDGHO:
+#if DO_WT == true
+        wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue()); //send a wtrig async play
+#endif
+        makeDebounce = u_tickInterval / 1000;
+        break;
       case COMMANDTAP:
         //compute if the tap will be saved on this step or into next
         int8_t updateDisplayTapStep;
@@ -941,7 +955,7 @@ void loop()
           //if this step is empty, play sound
           //if this is a valid step for this deck and this instrument isnt silenced
           if (!mood[thisDeck]->instruments[i]->getStep(updateDisplayTapStep) && !mood[thisDeck]->instruments[i]->permanentMute)
-            wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+            wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue()); //send a wtrig async play
 #endif
         }
         else
@@ -952,13 +966,13 @@ void loop()
 #if DO_WT == true
           //if this instrument isnt silenced
           if (!mood[thisDeck]->instruments[i]->permanentMute)
-            wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue() + 1); //send a wtrig async play
+            wTrig.trackPlayPoly(mood[thisDeck]->samples[i]->getValue()); //send a wtrig async play
 #endif
           mood[thisDeck]->instruments[i]->tappedStep = true;
         }
         mood[thisDeck]->instruments[i]->tapStep(updateDisplayTapStep);
         flagUD_tapNewStep = i;
-        makeDebounce = true;
+        makeDebounce = (u_tickInterval / 1000) << 1; //this is a special debounce time to avoid 1/4 difference and keep 1/2 distance from one tap to another
         break;
       case COMMANDUND:
         //if this pattern is a custom one and there was any rollback available
@@ -968,27 +982,27 @@ void loop()
           updateDisplay = true;
           flagUD_rollbackTappedStep = i;
         }
-        makeDebounce = true;
+        makeDebounce = 1000;
         break;
       case COMMANDERS:
         //erase pattern if possible
         mood[thisDeck]->instruments[i]->eraseInstrumentPattern();
         flagUD_eraseThisPattern = i;
-        makeDebounce = true;
+        makeDebounce = 1000;
         break;
       case COMMANDSIL:
         //silence only currently loaded deck
         mood[thisDeck]->instruments[i]->permanentMute = !mood[thisDeck]->instruments[i]->permanentMute;
-        makeDebounce = true;
+        makeDebounce = 1000;
         break;
       case COMMANDSOL:
         //solo an instrument
         mood[thisDeck]->setSoloInstrument(i);
-        makeDebounce = true;
+        makeDebounce = 1000;
         break;
       }
-      if (makeDebounce)
-        instrActionDebounceArray[i].debounce();
+      if (makeDebounce > 0)
+        instrActionDebounceArray[i].debounce(makeDebounce);
     }
   }
   //long interval between readings from action ladder menu

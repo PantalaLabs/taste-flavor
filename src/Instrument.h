@@ -24,38 +24,38 @@ public:
   Counter *patternIndex;
   uint16_t customPattern = 0;
   int8_t gateLenghtSize = 0;
-  boolean permanentMute = 0;
-  boolean tappedStep = 0;
+  bool permanentMute = 0;
+  bool tappedStep = 0;
   byte maxPatterns = 0;
 
   void resetCustomPatternToOriginal();
   void changeGateLenghSize(int8_t _change);
   void eraseInstrumentPattern();
   void customizeThisPattern();
-  boolean getStep(uint16_t _step);
-  boolean getStep(uint16_t _pat, uint16_t _step);
-  boolean getStep(uint16_t _pat, uint16_t _step, boolean _src);
+  bool getStep(uint16_t _step);
+  bool getStep(uint16_t _pat, uint16_t _step);
+  bool getStep(uint16_t _pat, uint16_t _step, bool _src);
 
   void setNextInternalPattern();
   void setPreviousInternalPattern();
 
   void setStep(uint16_t _step, uint16_t _val);
   void copystepTostep(uint16_t _source, uint16_t _target);
-  boolean undoLastTappedStep();
+  bool undoLastTappedStep();
   uint16_t undoAvailable();
   void clearUndoArray();
   void rollbackUndoStep();
   void addUndoStep(uint16_t _step);
   void tapStep(uint16_t _step);
-  boolean playThisStep(uint16_t _step);
-  boolean playThisTrigger(uint16_t _step);
+  bool playThisStep(uint16_t _step);
+  bool playThisTrigger(uint16_t _step);
   //byte setBytePositionIntoByteBlock(byte byteBlock, byte _stepId);
-  boolean solo;
-  
+  bool solo;
+
   //legacy
-  void legacyBooleanToByte();
-  void legacyEuclidBooleanToByte();
-  
+  void legacyboolToByte();
+  void legacyEuclidboolToByte();
+
 private:
   uint16_t bkpPattern = 0;
   void copyRefPatternToRefPattern(uint16_t _source, uint16_t _target);
@@ -76,6 +76,7 @@ private:
       {136, 136, 136, 136, 136, 136, 136, 136}, //2 10001000
       {136, 168, 136, 168, 136, 168, 136, 168}, //3 10001000 10101000
       {128, 128, 128, 128, 128, 128, 128, 128}, //4 10000000
+      {130, 0, 130, 40, 130, 0, 130, 40},       //5 10000010 00000000 10000010 00101000 10000010 00000000 10000010 00101000
   };
 
   byte instr2patterntable[G_INTERNALINSTR2PATTERNS + 1 + G_MAXEUCLIDIANPATTERNS][G_MAXBLOCKS] = {
@@ -94,7 +95,7 @@ private:
       {80, 0, 80, 0, 80, 0, 80, 0},             //12 01010000 00000000
       {82, 0, 82, 0, 82, 0, 82, 0},             //13 01010010 00000000
       {18, 16, 18, 18, 18, 16, 18, 18},         //14 00010010 00010000 00010010 00010010 00010010 00010000 00010010 00010010
-
+      {0, 128, 0, 128, 0, 128, 0, 128},         //15 00000000 10000000 00000000 10000000 00000000 10000000 00000000 10000000
   };
 
   byte instr3patterntable[G_INTERNALINSTR3PATTERNS + 1 + G_MAXEUCLIDIANPATTERNS][G_MAXBLOCKS] = {
@@ -109,7 +110,8 @@ private:
       {0, 0, 0, 8, 0, 0, 0, 8},                 //8 00000000000000000000000000001000
       {255, 255, 255, 255, 255, 255, 255, 255}, //9 1111
       {21, 21, 21, 12, 21, 21, 21, 21},         //10 00010101
-      {2, 2, 2, 2, 2, 2, 2, 2}                  //11 00000010
+      {2, 2, 2, 2, 2, 2, 2, 2},                 //11 00000010
+      {0, 0, 0, 0, 0, 0, 0, 32},                //12 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00100000
   };
 
   byte instr4patterntable[G_INTERNALINSTR4PATTERNS + 1 + G_MAXEUCLIDIANPATTERNS][G_MAXBLOCKS] = {
@@ -123,7 +125,8 @@ private:
       {0, 1, 0, 1, 0, 1, 0, 1},                 //7 00000000 00000001
       {32, 32, 32, 32, 32, 32, 32, 32},         //8 00100000
       {85, 85, 85, 85, 85, 85, 85, 85},         //9 01010101
-      {296, 296, 296, 356, 296, 296, 296, 356}, //10 100101000 100101000 100101000 101100100
+      {296, 296, 296, 356, 296, 296, 296, 356}, //10 10010100 10010100 10010100 10110010
+      {32, 34, 32, 34, 32, 36, 144, 240},       //11 00100000 00100010 00100000 00100010 00100000 00100100 10010000 11110000
   };
 
   byte instr5patterntable[G_INTERNALINSTR5PATTERNS + 1 + G_MAXEUCLIDIANPATTERNS][G_MAXBLOCKS] = {
@@ -139,6 +142,7 @@ private:
       {221, 221, 221, 221, 221, 221, 221, 221}, //9 11011101
       {0, 1, 0, 1, 0, 1, 0, 1},                 //10 00000000 00000001
       {1, 1, 1, 1, 1, 1, 1, 0},                 //11 11111110
+      {0, 0, 8, 0, 0, 0, 8, 8},                 //12 00000000 00000000 00001000 00000000 00000000 00000000 00001000 00001000
   };
 
   byte instr6patterntable[G_INTERNALINSTR6PATTERNS + 1 + G_MAXEUCLIDIANPATTERNS][G_MAXBLOCKS] = {
@@ -183,7 +187,7 @@ private:
       {181, 85, 106, 181, 85, 106, 181, 84},
   };
 
-  // boolean booleanEuclid[G_MAXEUCLIDIANPATTERNS][G_MAXSTEPS] = {
+  // bool boolEuclid[G_MAXEUCLIDIANPATTERNS][G_MAXSTEPS] = {
   //     {1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0},
   //     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
   //     {1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0},

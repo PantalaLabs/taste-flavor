@@ -26,7 +26,7 @@ Parameter::Parameter(uint8_t _min, uint8_t _max, uint8_t _wheight, uint8_t _potP
 #endif
 }
 
-boolean Parameter::readParameter()
+bool Parameter::readParameter()
 {
   uint16_t read = analogRead(potPin);
   read = dampen->add(read);

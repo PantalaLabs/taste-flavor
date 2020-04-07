@@ -3,7 +3,7 @@
 
 void checkDefaultDisplay();
 void displayEraseInstrumentPattern(uint8_t _instr);
-void displayShowInstrPattern(uint8_t _instr, boolean _src);
+void displayShowInstrPattern(uint8_t _instr, bool _src);
 void displayShowBrowsedMood();
 void displayUpdateLineArea(uint8_t _line, String _content);
 void displayEraseLineBlockAndSetText(uint8_t _line);
@@ -11,7 +11,7 @@ void displayShowCornerInfo(uint8_t _parm, int16_t _val);
 void displayShowCrossBar(int8_t _size);
 void displayClockSource();
 void displayWelcome();
-boolean crossfadedDeck(uint8_t _instr);
+bool crossfadedDeck(uint8_t _instr);
 
 //check if default display wasnt show yet
 void checkDefaultDisplay()
@@ -99,7 +99,7 @@ void displayShowBrowsedMood() //update almost all bottom display area with the n
   }
 }
 
-void displayShowInstrPattern(uint8_t _instr, boolean _src)
+void displayShowInstrPattern(uint8_t _instr, bool _src)
 {
   displayEraseInstrumentPattern(_instr);
   for (int8_t step = 0; step < (G_MAXSTEPS - 1); step++) //for each step

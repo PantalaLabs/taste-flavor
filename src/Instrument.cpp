@@ -74,29 +74,29 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 
 //PUBLIC----------------------------------------------------------------------------------------------
 //return if it is a valid/non valid _step from the actual pattern
-boolean Instrument::getStep(uint16_t _step)
+bool Instrument::getStep(uint16_t _step)
 {
-  byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
-  return bitRead(getThisBlock, 7 - (_step % 8));
+  byte thisBlockByte = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
+  return bitRead(thisBlockByte, 7 - (_step % 8));
 }
 
 //return if it is a valid/non valid _step from the selected _pat
-boolean Instrument::getStep(uint16_t _pat, uint16_t _step)
+bool Instrument::getStep(uint16_t _pat, uint16_t _step)
 {
-  byte getThisBlock = blocks[instrumentIdentifyer][_pat][_step / 8];
-  return bitRead(getThisBlock, 7 - (_step % 8));
+  byte thisBlockByte = blocks[instrumentIdentifyer][_pat][_step / 8];
+  return bitRead(thisBlockByte, 7 - (_step % 8));
 }
 
 //return if it is a valid/non valid _step from the selected _pat from RAM or ROM sources
-boolean Instrument::getStep(uint16_t _pat, uint16_t _step, boolean _src)
+bool Instrument::getStep(uint16_t _pat, uint16_t _step, bool _src)
 {
   //if search for the original pattern and this pattern was already customized , return the step on the BKP area
-  byte getThisBlock1 = blocks[instrumentIdentifyer][bkpPattern][_step / 8];
-  byte getThisBlock2 = blocks[instrumentIdentifyer][_pat][_step / 8];
-  return (bitRead(getThisBlock1, 7 - (_step % 8)) || bitRead(getThisBlock2, 7 - (_step % 8)));
+  byte thisBlockByte1 = blocks[instrumentIdentifyer][bkpPattern][_step / 8];
+  byte thisBlockByte2 = blocks[instrumentIdentifyer][_pat][_step / 8];
+  return (bitRead(thisBlockByte1, 7 - (_step % 8)) || bitRead(thisBlockByte2, 7 - (_step % 8)));
 }
 
-//reset actual parttern to its default and move pattern index forward 
+//reset actual parttern to its default and move pattern index forward
 void Instrument::setNextInternalPattern()
 {
   resetCustomPatternToOriginal();
@@ -113,9 +113,9 @@ void Instrument::setPreviousInternalPattern()
 //set step value 1/0
 void Instrument::setStep(uint16_t _step, uint16_t _val)
 {
-  byte getThisBlock = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8]; //recover the active block for this step
-  bitSet(getThisBlock, 7 - (_step % 8)) = (_val == 1) ? 1 : 0;                 //set inverting the significant step
-  blocks[instrumentIdentifyer][patternIndex->getValue()][getThisBlock] = getThisBlock;   //save block
+  byte thisBlockByte = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8]; //recover the active block for this step
+  bitWrite(thisBlockByte, 7 - (_step % 8), _val);                                         //set inverting the significant step
+  blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8] = thisBlockByte;      //save block
 }
 
 //change gate lenght size from this instrument
@@ -125,7 +125,7 @@ void Instrument::changeGateLenghSize(int8_t _change)
   gateLenghtSize = constrain(gateLenghtSize, 0, G_MAXGATELENGHTS);
 }
 
-//erase all instrument pattern 
+//erase all instrument pattern
 void Instrument::eraseInstrumentPattern()
 {
   //check if it is customizable
@@ -204,19 +204,19 @@ void Instrument::tapStep(uint16_t _step)
 }
 
 //if this step isnt silenced , neither tapped and a triggered 1 step
-boolean Instrument::playThisStep(uint16_t _step)
+bool Instrument::playThisStep(uint16_t _step)
 {
   return (!permanentMute && !tappedStep && getStep(_step));
 }
 
 //if this is a valid step
-boolean Instrument::playThisTrigger(uint16_t _step)
+bool Instrument::playThisTrigger(uint16_t _step)
 {
   return (getStep(_step));
 }
 
 //if this pattern is custom and there is an undo available
-boolean Instrument::undoLastTappedStep()
+bool Instrument::undoLastTappedStep()
 {
   if (customPattern && undoAvailable())
   {
@@ -233,8 +233,8 @@ boolean Instrument::undoLastTappedStep()
 //   return bitSet(byteBlock, position % 8);
 // }
 
-//legacy : convert old boolean arrays to new byte block arrays
-// void Instrument::legacyBooleanToByte()
+//legacy : convert old bool arrays to new byte block arrays
+// void Instrument::legacyboolToByte()
 // {
 //   Serial.print("table");
 //   Serial.print(instrumentIdentifyer);
@@ -255,8 +255,8 @@ boolean Instrument::undoLastTappedStep()
 //   }
 //   Serial.println("};");
 // }
-// //legacy : convert old euclidean boolean arrays to new byte block arrays
-// void Instrument::legacyEuclidBooleanToByte()
+// //legacy : convert old euclidean bool arrays to new byte block arrays
+// void Instrument::legacyEuclidboolToByte()
 // {
 //   Serial.print("euclid");
 //   Serial.println("[][]={");
@@ -267,7 +267,7 @@ boolean Instrument::undoLastTappedStep()
 //     {
 //       byte accum = 0;
 //       for (byte step = 0; step < 8; step++)
-//         if (booleanEuclid[pat][block * 8 + 7 - step])
+//         if (boolEuclid[pat][block * 8 + 7 - step])
 //           accum = accum | (1 << step);
 //       Serial.print(accum);
 //       Serial.print(",");

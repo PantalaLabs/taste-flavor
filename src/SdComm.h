@@ -46,22 +46,22 @@ class SdComm
 public:
   SdComm();
   SdComm(uint8_t _cspin);
-  SdComm(uint8_t _cspin, boolean _dbg);
-  boolean createTestMoods();
-  boolean dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
+  SdComm(uint8_t _cspin, bool _dbg);
+  bool createTestMoods();
+  bool dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6);
   void importMoods(String refMoodName[], uint16_t refMoodData[][7], uint16_t startIndex);
   void importInstrumentPattern(uint8_t instr, uint16_t refPatternTable[][G_MAXSTEPS], uint16_t startIndex);
   uint16_t getimportedRecords();
 
 private:
   File myFile;
-  boolean _debug;
+  bool _debug;
   void init();
-  boolean deleteFile();
-  boolean openFileToWrite(String _fileName);
-  boolean openFileToAppend(String _fileName);
-  boolean openFileToRead(String _fileName);
-  boolean closeFile();
+  bool deleteFile();
+  bool openFileToWrite(String _fileName);
+  bool openFileToAppend(String _fileName);
+  bool openFileToRead(String _fileName);
+  bool closeFile();
   uint16_t importedRecords;
   void debug(String _str);
 };

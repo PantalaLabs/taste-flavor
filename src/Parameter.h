@@ -14,7 +14,7 @@ class Parameter
 {
 public:
   Parameter(uint8_t _min, uint8_t _max, uint8_t _wheight, uint8_t _potPin);
-  boolean readParameter();
+  bool readParameter();
   uint8_t getValue();
 
 private:

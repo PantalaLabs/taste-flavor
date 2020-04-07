@@ -49,7 +49,7 @@ void Mood::cue(uint8_t moodId, uint8_t p1, uint8_t p2, uint8_t p3, uint8_t p4, u
   instruments[5]->patternIndex->setValue(p6);
 }
 
-void Mood::cueXfadedInstrument(uint16_t _instr, uint16_t _newSampleId, uint16_t _newPatternId, boolean _newMute, uint8_t _newLenght)
+void Mood::cueXfadedInstrument(uint16_t _instr, uint16_t _newSampleId, uint16_t _newPatternId, bool _newMute, uint8_t _newLenght)
 {
   samples[_instr]->setValue(_newSampleId);
   instruments[_instr]->patternIndex->setValue(_newPatternId);
@@ -96,7 +96,7 @@ void Mood::resetAllGateLenght()
     instruments[i]->gateLenghtSize = 0;
 }
 
-void Mood::setAllPlayable(boolean _status)
+void Mood::setAllPlayable(bool _status)
 {
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     instruments[i]->permanentMute = !_status;

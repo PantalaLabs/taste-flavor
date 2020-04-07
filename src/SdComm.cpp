@@ -23,7 +23,7 @@ SdComm::SdComm(uint8_t _cspin)
   init();
 }
 
-SdComm::SdComm(uint8_t _cspin, boolean _dbg)
+SdComm::SdComm(uint8_t _cspin, bool _dbg)
 {
   _debug = _dbg;
   init();
@@ -40,7 +40,7 @@ void SdComm::init()
   delay(100);
 }
 
-boolean SdComm::deleteFile()
+bool SdComm::deleteFile()
 {
   if (!SD.remove("MOODS.TXT"))
   {
@@ -54,7 +54,7 @@ boolean SdComm::deleteFile()
   }
 }
 
-boolean SdComm::openFileToRead(String _fileName)
+bool SdComm::openFileToRead(String _fileName)
 {
   myFile = SD.open(_fileName, O_READ);
   if (myFile)
@@ -63,7 +63,7 @@ boolean SdComm::openFileToRead(String _fileName)
   return false;
 }
 
-boolean SdComm::openFileToAppend(String _fileName)
+bool SdComm::openFileToAppend(String _fileName)
 {
   myFile = SD.open(_fileName, O_APPEND);
   if (myFile)
@@ -72,7 +72,7 @@ boolean SdComm::openFileToAppend(String _fileName)
   return false;
 }
 
-boolean SdComm::openFileToWrite(String _fileName)
+bool SdComm::openFileToWrite(String _fileName)
 {
   myFile = SD.open(_fileName, FILE_WRITE);
   if (myFile)
@@ -81,13 +81,13 @@ boolean SdComm::openFileToWrite(String _fileName)
   return false;
 }
 
-boolean SdComm::closeFile()
+bool SdComm::closeFile()
 {
   myFile.close();
   debug("closed");
 }
 
-boolean SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6)
+bool SdComm::dumpOneMood(String _name, uint8_t _p1, uint8_t _p2, uint8_t _p3, uint8_t _p4, uint8_t _p5, uint8_t _p6)
 {
   if (!myFile)
   {
@@ -196,7 +196,7 @@ void SdComm::importMoods(String refMoodName[], uint16_t refMoodData[][7], uint16
   }
 }
 
-boolean SdComm::createTestMoods()
+bool SdComm::createTestMoods()
 {
   deleteFile();
   if (!openFileToWrite(MOODFILE))

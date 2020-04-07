@@ -27,10 +27,10 @@ class CVSequence
 {
 public:
   CVSequence();
-  boolean readNewParameter();
+  bool readNewParameter();
   uint16_t getNote();
   uint16_t getSubNote();
-  void resetStepCounter();
+  void resetStepCounter(int32_t _ref);
   void computeNewCVSequence();
 
 private:
@@ -47,7 +47,7 @@ private:
   Counter *queuedParameter;
   void computeAccents();
   void computeSubCVSequence();
-  int8_t applyFilter(int8_t _note, boolean _type);
+  int8_t applyFilter(int8_t _note, bool _type);
   uint8_t stepCounter; //CVSequence step counter
 
   //2=final original computed

@@ -72,7 +72,7 @@ uint16_t CVSequence::getNote()
 }
 
 //apply HPF or LPF : MIDI field
-int8_t CVSequence::applyFilter(int8_t _note, boolean _type)
+int8_t CVSequence::applyFilter(int8_t _note, bool _type)
 {
   uint8_t filterCutOff = parm_filter->getValue();
   if (_type)
@@ -97,12 +97,15 @@ int8_t CVSequence::applyFilter(int8_t _note, boolean _type)
   return _note;
 }
 
-void CVSequence::resetStepCounter()
+void CVSequence::resetStepCounter(int32_t _ref)
 {
-  stepCounter = 0;
+  if (_ref > 0)
+    stepCounter = 0;
+  else
+    stepCounter = 1;
 }
 
-boolean CVSequence::readNewParameter()
+bool CVSequence::readNewParameter()
 {
   uint16_t _param;
   _param = queuedParameter->advance();
