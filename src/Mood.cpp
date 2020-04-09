@@ -67,10 +67,11 @@ void Mood::changeMaxMoods(uint16_t _max)
 void Mood::reset()
 {
   resetAllCustomPatternsToOriginal();
-  setAllPlayable(true);
   resetAllGateLenght();
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
   {
+    instruments[i]->bkpMute = false;
+    instruments[i]->permanentMute = false;
     samples[i]->reset();
     instruments[i]->patternIndex->reset();
   }
@@ -96,31 +97,44 @@ void Mood::resetAllGateLenght()
     instruments[i]->gateLenghtSize = 0;
 }
 
-void Mood::setAllPlayable(bool _status)
-{
-  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    instruments[i]->permanentMute = !_status;
-}
-
 void Mood::setSoloInstrument(uint8_t instr)
 {
+  //before solo or unsolo any specific instrument
+  //must check if there is any previous different solo´d instrument
+  //to roll back all instruments to its initial mute value 
+  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+    //if instrument isnt the chosen one and it is solo´d
+    if ((i != instr) && instruments[i]->solo)
+    {
+      //resto all initial mute condition
+      for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+        instruments[i]->permanentMute = instruments[i]->bkpMute;
+      //and unsolo it
+      instruments[i]->solo = false;
+    }
 
+  //now we are able to solo an instrument 
   //change instrument solo status
   instruments[instr]->solo = !instruments[instr]->solo;
 
-  //set it as solo
+  //if must solo an instrument
   if (instruments[instr]->solo)
   {
-    setAllPlayable(false);
+    //for all instruments
+    for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+    {
+      //bkp the original mute condition
+      instruments[i]->bkpMute = instruments[i]->permanentMute;
+      //mute it
+      instruments[i]->permanentMute = true;
+    }
+    //unmute only the chosen instrument
     instruments[instr]->permanentMute = false;
   }
   else
   {
-    //enable all instruments
-    setAllPlayable(true);
+    //if must unsolo an instrument, restore, just restore all initial mute condition
+    for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+      instruments[i]->permanentMute = instruments[i]->bkpMute;
   }
-  //reset all instruments solo unless the choosen
-  for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-    if (i != instr)
-      instruments[i]->solo = false;
 }

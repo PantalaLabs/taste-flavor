@@ -76,8 +76,9 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 //return if it is a valid/non valid _step from the actual pattern
 bool Instrument::getStep(uint16_t _step)
 {
-  byte thisBlockByte = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
-  return bitRead(thisBlockByte, 7 - (_step % 8));
+  return getStep(patternIndex->getValue(), _step);
+  // byte thisBlockByte = blocks[instrumentIdentifyer][patternIndex->getValue()][_step / 8];
+  // return bitRead(thisBlockByte, 7 - (_step % 8));
 }
 
 //return if it is a valid/non valid _step from the selected _pat

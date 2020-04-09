@@ -24,8 +24,9 @@ public:
   Counter *patternIndex;
   uint16_t customPattern = 0;
   int8_t gateLenghtSize = 0;
-  bool permanentMute = 0;
-  bool tappedStep = 0;
+  bool permanentMute = false;
+  bool bkpMute = false;
+  bool tappedStep = false;
   byte maxPatterns = 0;
 
   void resetCustomPatternToOriginal();

@@ -26,7 +26,6 @@ public:
   void changeMaxMoods(uint16_t _max);
   void reset();
   void setSoloInstrument(uint8_t instr);
-  void setAllPlayable(bool _status);
 
 private:
   void resetAllGateLenght();
