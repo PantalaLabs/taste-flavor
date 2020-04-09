@@ -101,7 +101,7 @@ void Mood::setSoloInstrument(uint8_t instr)
 {
   //before solo or unsolo any specific instrument
   //must check if there is any previous different solo´d instrument
-  //to roll back all instruments to its initial mute value 
+  //to roll back all instruments to its initial mute value
   for (uint8_t i = 0; i < G_MAXINSTRUMENTS; i++)
     //if instrument isnt the chosen one and it is solo´d
     if ((i != instr) && instruments[i]->solo)
@@ -113,7 +113,7 @@ void Mood::setSoloInstrument(uint8_t instr)
       instruments[i]->solo = false;
     }
 
-  //now we are able to solo an instrument 
+  //now we are able to solo an instrument
   //change instrument solo status
   instruments[instr]->solo = !instruments[instr]->solo;
 

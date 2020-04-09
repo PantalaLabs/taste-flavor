@@ -602,7 +602,7 @@ void ISRendTriggers()
   else
   {
     Timer5.stop();                      //stops trigger timer
-    Timer5.start(G_EXTENDEDGATELENGHT); //start another 80ms trigger gap timer
+    Timer5.start(G_EXTENDEDGATELENGHT); //start another G_EXTENDEDGATELENGHT _US trigger timer
   }
 }
 
@@ -740,6 +740,8 @@ void loop()
   //read queued encoders
   processRotaryEncoder();
 
+  //processAsync();
+
   //ASYNC updates ==============================================================
   //flags if any display update will be necessary in this cycle
   bool updateDisplay = false;
@@ -859,7 +861,7 @@ void loop()
     updateDisplay = true;
     flagUD_tapNewStep = -1;
   }
-  //rolback tap
+  //rollback tap
   else if (flagUD_rollbackTappedStep != -1)
   {
     //update display with removed step

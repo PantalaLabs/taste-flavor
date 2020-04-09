@@ -21,7 +21,6 @@ Instrument::Instrument(uint16_t _instr, uint16_t _maxPatterns)
 #endif
   instrumentIdentifyer = _instr;
   maxPatterns = _maxPatterns;
-  solo = false;
 
   patternIndex = new Counter(_maxPatterns);
   //add euclidean patterns to each instrument pattern collection
@@ -207,7 +206,7 @@ void Instrument::tapStep(uint16_t _step)
 //if this step isnt silenced , neither tapped and a triggered 1 step
 bool Instrument::playThisStep(uint16_t _step)
 {
-  return (!permanentMute && !tappedStep && getStep(_step));
+  return (!manualMuted && !tappedStep && getStep(_step));
 }
 
 //if this is a valid step

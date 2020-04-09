@@ -24,6 +24,7 @@ public:
   Counter *patternIndex;
   uint16_t customPattern = 0;
   int8_t gateLenghtSize = 0;
+  bool solo = false;
   bool permanentMute = false;
   bool bkpMute = false;
   bool tappedStep = false;
@@ -51,7 +52,6 @@ public:
   bool playThisStep(uint16_t _step);
   bool playThisTrigger(uint16_t _step);
   //byte setBytePositionIntoByteBlock(byte byteBlock, byte _stepId);
-  bool solo;
 
   //legacy
   void legacyboolToByte();
