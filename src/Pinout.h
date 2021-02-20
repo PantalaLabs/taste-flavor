@@ -19,23 +19,22 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define TRIGGERINPIN 51
 #define RESETINPIN 53
 #define TRIGOUTPATTERNPIN 7
-#define PARAMETERCHANGE 49
 #define TRIGOUTPIN1 5
 #define TRIGOUTPIN2 3
 #define TRIGOUTPIN3 16
 #define TRIGOUTPIN4 29
-#define TRIGOUTPIN5 23
+#define TRIGOUTPIN5 25
 #define TRIGOUTPIN6 27
 
 #define PARAMACTIVITY 47
 
-//action buttons
+//action/mute buttons
 #define ACTIONPININSTR1 6
 #define ACTIONPININSTR2 4
 #define ACTIONPININSTR3 2
 #define ACTIONPININSTR4 17
-#define ACTIONPININSTR5 31
-#define ACTIONPININSTR6 25
+#define ACTIONPININSTR5 23
+#define ACTIONPININSTR6 31
 
 //encoders
 #define ENCPINAMOOD 13
@@ -53,8 +52,8 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define ENCPINAINSTR3 44
 #define ENCPINBINSTR3 42
 #define ENCBUTPININSTR3 46
-#define ENCPINAINSTR4 14
-#define ENCPINBINSTR4 15
+#define ENCPINAINSTR4 15
+#define ENCPINBINSTR4 14
 #define ENCBUTPININSTR4 22
 #define ENCPINAINSTR5 50
 #define ENCPINBINSTR5 48
@@ -77,14 +76,6 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define SD_CS 39
 
 //=======================analog pins=======================
-#define G_LADDERMENUPIN A0  //laddr menu
-#define G_CVSEQPARAMPIN0 A1 //melody parameters
-#define G_CVSEQPARAMPIN1 A2
-#define G_CVSEQPARAMPIN2 A3
-#define G_CVSEQPARAMPIN3 A4
-#define G_CVSEQPARAMPIN4 A5
-#define G_CVSEQPARAMPIN5 A6
-#define G_CVSEQPARAMPIN6 A7
-#define G_CVSEQPARAMPIN7 A8
+#define G_LADDERMENUPIN A0 //laddr menu
 
 #endif

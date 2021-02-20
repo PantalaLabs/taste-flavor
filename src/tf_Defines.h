@@ -7,43 +7,27 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #ifndef tf_Defines_h
 #define tf_Defines_h
 
-#define DO_SERIAL true //debugging mode
-#define DO_WT true     //do everything related to WaveTrigger
-#define DO_SD false    //do everything related to SD card
+#define DO_WT //do everything related to WaveTrigger ,comment to not
+#define DEB   //debug mode, comment to not
 
 //encoders
 #define MAXENCODERS 8  //total of encoders
 #define MOODENCODER 0  //MOOD encoder id
 #define CROSSENCODER 1 //CROSS encoder id
 
-#define RAM 0                      //changeble patterns
-#define ROM 1                      //original reference patterns
-#define G_MAXINSTRUMENTS 6         //total of instruments
-#define G_MAXSTEPS 64              //max step sequence
-#define G_MAXBLOCKS 8              //max step sequence blocks of 8 steps
+#define RAM 0              //BKP pattern
+#define ROM 1              //mute pattern
+#define G_MAXINSTRUMENTS 6 //total of instruments
+#define G_MAXSTEPS 64      //max step sequence
+#define G_BLOCKBITS 32     //number os bits of each pattern bitblock
+//#define G_MAXBLOCKS 8              //number os blobks of each pattern
 #define G_MAXGATELENGHTS 12        //max number of different gatelenghts
 #define G_DEFAULTGATELENGHT 5000   //first gatelenght in ms
 #define G_EXTENDEDGATELENGHT 20000 //gate lenght size increment
-#define G_MAXEUCLIDIANPATTERNS 26
 
 #define G_MAXMEMORYMOODS 300 //max number of moods
-#define G_INTERNALMOODS 21   //internal moods
-#define G_INTERNALINSTR1PATTERNS 5
-#define G_INTERNALINSTR2PATTERNS 15
-#define G_INTERNALINSTR3PATTERNS 12
-#define G_INTERNALINSTR4PATTERNS 11
-#define G_INTERNALINSTR5PATTERNS 12
-#define G_INTERNALINSTR6PATTERNS 13
 #define G_MAXBPM 160
 #define G_MINBPM 60
-
-#define MOODFILE "MOODS.TXT"
-#define INTRUMENT1PATTERNFILE "INSTR1.TXT"
-#define INTRUMENT2PATTERNFILE "INSTR2.TXT"
-#define INTRUMENT3PATTERNFILE "INSTR3.TXT"
-#define INTRUMENT4PATTERNFILE "INSTR4.TXT"
-#define INTRUMENT5PATTERNFILE "INSTR5.TXT"
-#define INTRUMENT6PATTERNFILE "INSTR6.TXT"
 
 //#define I2C_ADDRESS 0x3D
 #define I2C_ADDRESS 0x3C
@@ -51,6 +35,17 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define DISPLAY_HEIGHT 64 // display height, in pixels
 #define TEXTLINE_HEIGHT 9 // text line height, in pixels
 
-#define MAXCVSEQPARMS 8 //max cv sequencer parameters ###########################
+//ladder menu
+#define MAXPARAMETERS 9
+#define COMMANDSMP 0
+#define COMMANDGHO 1
+#define COMMANDTAP 2
+#define COMMANDUND 3
+#define COMMANDSIL 4
+#define COMMANDERS 5
+#define COMMANDGTL 6
+#define COMMANDLAT 7
+#define COMMANDSOL 8
+#define COMMANDNUL 9
 
 #endif
