@@ -1,7 +1,5 @@
 Pantala Labs - Taste & Flavor / PMC 
 
-MACRO<br>
-
 Taste & Flavor é um projeto OPEN SOURCE formado por módulo padrão Eurorack que compreeende um sequenciador de triggers/gates acoplado à um múltiplo sample player e um mixer de 6 pistas que visa preencher uma lacuna importante nas performances ao vivo com sintetizadores modulares permitindo a criação de uma nova "vibe" a cada troca de percussão.<br>
 Essa mudança de vibe, de estado de espírito, representada pela palavra em inglês MOOD, faz parte de um conceito que criei chamado Mood Oriented Instruments. Estes instrumentos, neste nosso caso o módulo, deve ter a capacidade de não só reproduzir sons sob demanda, presets, mas também,  através de algoritmos, adicionar algum nível de inteligência na composição sonora final.<br>
 O módulo possui uma interface de simples entendimento e com poucos botões/comandos garantindo o seu fácil uso, criativo e principalmente com uma dinâmica extremamente fluída para transições sonoras inspirado nas possibilidades disponíveis em um DJ Set.<br>
