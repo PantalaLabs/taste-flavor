@@ -36,20 +36,20 @@ No money will be paid for the samples.<br>
 Anyone can copy / share / modify its contents.<br>
 The couterpart is that your samples will make this a better project and will be available to all modular synth users.
 
-If you have any questions, I will be happy to answer them.
+If you have any questions, I will be happy to answer them.<br>
 
-Thank you so much for the patient reading! I am available for any chat.
+Thank you so much for the patient reading!<br>
 
-Gibran
+Gibran<br>
 
-gibrancurtiss@gmail.com
+gibrancurtiss@gmail.com<br>
 
 https://www.instagram.com/gibrancurtiss
 
 https://www.facebook.com/pantalalabs/
 
-Contributing Music Producers (alphabetical order):
+Contributing Music Producers (alphabetical order):<br>
 
-Carlos Pires - Cause Org Records (BRA)
-Edu M - DetroitBR (BRA)
-Fabricio Peçanha - (BRA)
+Carlos Pires - Cause Org Records (BRA)<br>
+Edu M - DetroitBR (BRA)<br>
+Fabricio Peçanha - (BRA)<br>
