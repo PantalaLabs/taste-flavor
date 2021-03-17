@@ -16,8 +16,6 @@ Allows you to Undo the Tap sequence if you miss some step.<br>
 
 And finally, the morph/crossfader feature to make transitions form one Mood to another. This is the biggest feature that guarantees the idea of "fluid dynamics."<br>
 
-The project is already done. Just waiting the finel panels.<br>
-
 <img width="600" src="images/painel taste and flavor.jpg"></img>
 <br>
 
