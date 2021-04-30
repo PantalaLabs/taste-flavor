@@ -28,8 +28,6 @@ bool thisDeck = 0;
 wavTrigger wTrig;
 #endif
 
-#define DISPLAYUPDATETIME 35000 //microsseconds to update display
-
 #include <Adafruit_SSD1306.h>
 #define OLED_RESET 43 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(DISPLAY_WIDTH, DISPLAY_HEIGHT, &Wire, OLED_RESET);
@@ -37,15 +35,15 @@ AnalogInput ladderMenu(G_LADDERMENUPIN); ///analog pin
 uint8_t laddderMenuOption;               //actual selected ladder menu
 int laddderMenuSeparators[MAXPARAMETERS + 1] = {30, 140, 290, 490, 620, 750, 840, 900, 980, G_MAX10BIT};
 uint32_t laddderMenuReadDebounce;            //interval to read ladder menu
+volatile uint32_t triggerInAllowed;          //trigger in debounce
 volatile uint32_t u_lastTick;                //last time tick was called
 volatile uint32_t u_tickInterval = 1000000;  //tick interval
 volatile uint32_t safeZoneEndTime;           //safe time zone
 volatile int8_t stepCount = 0;               //main stepcount
 int8_t queuedRotaryEncoder = 0;              //queued rotary encoder
 bool updateDisplayUpdateLatencyComp = false; //flag to update latency compensation
-int32_t u_LatencyComp = 1100;                //default latency compensation keep the 100 microsseconds there
-const int32_t u_LatencyCompStep = 1000;      //latency compensation amount update step
-#define u_LatencyCompLimit 20000             //latency compensation + and - limit
+volatile bool safeZone;                      //to avoid to change sample or timing just before it was triggered
+int32_t u_LatencyComp = 100;                 //default latency compensation keep the 100 microsseconds there
 uint16_t bpm = 125;                          //actual bpm in bpm
 uint32_t u_bpm = 0;                          //actual bpm value in us
 uint8_t encoderButtonPins[MAXENCODERS] = {ENCBUTPINMOOD, ENCBUTPINCROSS, ENCBUTPININSTR1, ENCBUTPININSTR2, ENCBUTPININSTR3, ENCBUTPININSTR4, ENCBUTPININSTR5, ENCBUTPININSTR6};
@@ -72,21 +70,23 @@ Rotary instr5encoder(ENCPINAINSTR5, ENCPINBINSTR5);
 Rotary instr6encoder(ENCPINAINSTR6, ENCPINBINSTR6);
 Rotary *encoders[MAXENCODERS] = {&moodEncoderPot, &crossEncoderPot, &instr1encoder, &instr2encoder, &instr3encoder, &instr4encoder, &instr5encoder, &instr6encoder};
 
-bool flagUD_newClockSource = false;      //show clock source
-bool flagUD_save = false;                //show saved message
-bool flagUD_error = false;               //show error message
-bool flagUD_browseThisMood = false;      //show browsed mood
-bool flagUD_newMoodSelected = false;     //show selected mood
-bool flagUD_newBpmValue = false;         //show bpm
-int8_t flagUD_newCrossfaderPosition = 0; //show new crossfader position
-int8_t flagUD_newPlayingPattern = -1;    //show instrument pattern
-int8_t flagUD_newPlayingSample = -1;     //show sample
-int8_t flagUD_newGateLenght = -1;        //show gate lenght
-int8_t flagUD_eraseThisPattern = -1;     //show selected pattern
-int8_t flagUD_tapNewStep = -1;           //show tap new step
-int8_t flagUD_rollbackTappedStep = -1;   //show undo tapped step
+bool flagUD_newClockSource = false;         //show clock source
+bool flagUD_save = false;                   //show saved message
+bool flagUD_error = false;                  //show error message
+bool flagUD_browseThisMood = false;         //show browsed mood
+bool flagUD_newMoodSelected = false;        //show selected mood
+bool flagUD_newBpmValue = false;            //show bpm
+int8_t flagUD_newCrossfaderPosition = 0;    //show new crossfader position
+int8_t flagUD_newPlayingPattern = -1;       //show instrument pattern
+int8_t flag_newPlayingPatternDirection = 0; //update playing pattern reward / forward
+int8_t flagUD_newPlayingSample = -1;        //show sample
+int8_t flag_newPlayingSampleDirection;      //previous or next sample
+int8_t flagUD_newGateLenght = -1;           //show gate lenght
+int8_t flagUD_eraseThisPattern = -1;        //show selected pattern
+int8_t flagUD_tapNewStep = -1;              //show tap new step
+int8_t flagUD_rollbackTappedStep = -1;      //show undo tapped step
 //bool flag_fromSavedMood = false; // ??????? prepare current deck to leave it the same way user customized
-int8_t flag_newCrossfaderValue = 0;     //update new value on crossfader ,  inside safe zone
+int8_t changedCrossfaderValue = 0;      //update new value on crossfader ,  inside safe zone
 bool allChannelsMuteState = false;      //stores mute / unmute state
 bool internalClockSource = true;        //0=internal , 1=external
 bool defaultDisplayNotActiveYet = true; //display not used yet
@@ -238,12 +238,19 @@ void setup()
   }
 
   //import moods from SD card
-
+  bool errorSdCard;
   DEB("initializing SD card...");
   if (!SD.begin(SD_CS))
+  {
+    errorSdCard = true;
     DEBL("begin failed");
+  }
   else
+  {
+    errorSdCard = false;
     DEBL("begin done");
+  }
+
   importedMoodsFromSd = SD_loadMoods();
   //SD_importPatterns();
   //update decks to recognize new moods
@@ -323,17 +330,23 @@ void setup()
     display.println(F("No WT communication"));
   wTrig.setReporting(false);
 #endif
+
+  if (errorSdCard)
+    display.println(F("No SD communication"));
+  else
+    display.println(F("SD communication OK"));
+
   display.display();
-  delay(3000);
-  displayWelcome();
+  display.println(F("<-- mood sel/set"));
+  display.println(F("           cross -->"));
   display.display();
 
   //clock
   u_bpm = bpm2micros4ppqn(bpm);
   attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRidentifyExtClockSource, FALLING);
-  Timer3.attachInterrupt(ISRbaseTimer);
+  Timer3.attachInterrupt(ISRtickTimer);
   Timer3.start(u_bpm);
-  Timer4.attachInterrupt(ISRfireTimer4);
+  Timer4.attachInterrupt(ISRfireSamples);
   Timer5.attachInterrupt(ISRendTriggers);
 
   DEBL("setup ends.");
@@ -341,30 +354,35 @@ void setup()
   //END SETUP-----------------------------------------------------------------------------
 }
 
+//MAIN TIMERS ============================================================================
 //base clock / external clock
-void ISRbaseTimer()
+void ISRtickTimer()
 {
   noInterrupts();
-  if (internalClockSource)
-    Timer3.stop();
-  u_tickInterval = micros() - u_lastTick;
-  u_lastTick = micros();
-  if (u_LatencyComp >= 0)
-    Timer4.start(u_LatencyComp);
-  else
-    Timer4.start(u_tickInterval + u_LatencyComp);
-  if (internalClockSource)
-    Timer3.start(bpm2micros4ppqn(bpm));
+  if (millis() > triggerInAllowed)
+  {
+    triggerInAllowed = millis() + 30;
+    // if (internalClockSource)
+    //   Timer3.stop();
+    uint32_t thisMicros = micros();
+    u_tickInterval = thisMicros - u_lastTick;
+    u_lastTick = thisMicros;
+    safeZone = false;
+    safeZoneEndTime = 0; //forces this interval until fire samples a safezone
+    if (internalClockSource)
+      Timer3.start(bpm2micros4ppqn(bpm));
+    if (u_LatencyComp > 0)
+      Timer4.start(u_LatencyComp);
+    else
+      Timer4.start(u_tickInterval + u_LatencyComp);
+  }
   interrupts();
 }
 
 //shifted clock and step sequencer related
-void ISRfireTimer4()
+void ISRfireSamples()
 {
   noInterrupts();
-  Timer5.start(G_DEFAULTGATELENGHT); //start 5ms first trigger timer
-  Timer4.stop();                     //stop timer shift
-
   for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++) //for each instrument
   {
     bool targetDeck;
@@ -390,13 +408,17 @@ void ISRfireTimer4()
 #ifdef DO_WT
   wTrig.resumeAllInSync();
 #endif
-  interrupts();
   gateLenghtCounter = 0;
   if ((stepCount == 0) || (stepCount == 60) || (stepCount == 56))
     trigOutPattern.start();
   NEXT(stepCount, G_MAXSTEPS);
-  safeZoneEndTime = (micros() + u_tickInterval - DISPLAYUPDATETIME);
+  safeZone = false;
+  safeZoneEndTime = (micros() + u_tickInterval - LOADSAMPLETIME);
+  Timer4.stop();                     //stop sample fire timer
+  Timer5.start(G_DEFAULTGATELENGHT); //start 5ms first trigger timer
+  interrupts();
 }
+//END MAIN TIMERS ============================================================================
 
 void ISRidentifyExtClockSource()
 {
@@ -435,101 +457,14 @@ void ISRendTriggers()
   }
   else
   {
-    //Timer5.stop();                      //stops trigger timer
     Timer5.start(G_EXTENDEDGATELENGHT); //start another G_EXTENDEDGATELENGHT _US trigger timer
   }
-}
-
-//allows to change samples only upo to after 2/3 of the tick interval
-//to avoid to change sample the same time it was triggered
-bool safeZone()
-{
-  return (micros() < safeZoneEndTime);
 }
 
 //return if this instrument belongs to this or not to this deck
 bool crossfadedDeck(uint8_t _instr)
 {
   return (_instr < crossfader) ? thisDeck : !thisDeck;
-}
-
-//read queued encoder status
-void processRotaryEncoder()
-{
-  NEXT(queuedRotaryEncoder, MAXENCODERS);
-  unsigned char result = encoders[queuedRotaryEncoder]->process();
-  if ((result == 16) || (result == 32))
-  {
-    int8_t encoderChange;
-    encoderChange = (result == 16) ? 1 : -1;
-    if (queuedRotaryEncoder == MOODENCODER)
-    {
-      selectedMood += encoderChange;
-      selectedMood = constrain(selectedMood, 0, importedMoodsFromSd - 1);
-      if (lastSelectedMood != selectedMood)
-      {
-        flagUD_browseThisMood = true;
-        lastSelectedMood = selectedMood;
-      }
-    }
-    else if (queuedRotaryEncoder == CROSSENCODER)
-    {
-      //if latency menu pressed together , change timer shift
-      if (laddderMenuOption == COMMANDLAT)
-      {
-        u_LatencyComp += encoderChange * u_LatencyCompStep;
-        u_LatencyComp = constrain(u_LatencyComp, -u_LatencyCompLimit, u_LatencyCompLimit);
-        updateDisplayUpdateLatencyComp = true;
-      }
-      //if cross button is pressed and cross rotate CHANGE BPM
-      if (onlyOneEncoderButtonIsPressed(ENCBUTCROSS) && (millis() > interfaceEventDebounce))
-      {
-        flagUD_newBpmValue = true;
-        bpm += encoderChange;
-        bpm = constrain(bpm, G_MINBPM, G_MAXBPM);
-        u_bpm = bpm2micros4ppqn(bpm);
-        interfaceEventDebounce = millis() + 50; //block any other interface event
-      }
-      else
-      { //or else , cross change
-        //flags to update crossfader value ONLY inside the safe zone
-        flag_newCrossfaderValue = crossfader + encoderChange;
-        flag_newCrossfaderValue = constrain(flag_newCrossfaderValue, 0, G_MAXINSTRUMENTS);
-        // crossfader += encoderChange;
-        // crossfader = constrain(crossfader, 0, G_MAXINSTRUMENTS);
-        flagUD_newCrossfaderPosition = encoderChange;
-      }
-    }
-    else
-    {
-      //all other instrument encoders
-      uint8_t _instrum = queuedRotaryEncoder - 2; //discard mood and morph indexes
-      //sample change
-      if (laddderMenuOption == COMMANDSMP)
-      {
-        if (encoderChange == -1)
-          mood[thisDeck]->samples[_instrum]->safeChange(-G_MAXINSTRUMENTS);
-        else
-          mood[thisDeck]->samples[_instrum]->safeChange(G_MAXINSTRUMENTS);
-        flagUD_newPlayingSample = _instrum;
-      }
-      //gate lenght change
-      else if (laddderMenuOption == COMMANDGTL)
-      {
-        mood[thisDeck]->patterns[_instrum]->changeGateLenghSize(encoderChange);
-        flagUD_newGateLenght = _instrum;
-      }
-      //pattern change
-      else if (noneEncoderButtonIsPressed())
-      {
-        if (encoderChange == -1)
-          mood[thisDeck]->patterns[_instrum]->patternIndex->reward();
-        else
-          mood[thisDeck]->patterns[_instrum]->patternIndex->advance();
-        flagUD_newPlayingPattern = _instrum; //flags to update this instrument on display
-      }
-    }
-  }
 }
 
 //verify if NO ONE encoder button is pressed
@@ -571,149 +506,331 @@ bool twoEncoderButtonsArePressed(uint8_t _target1, uint8_t _target2)
 
 void loop()
 {
-  if ((!externalCLockSourceAllowed) && (millis() > 5000))
-    externalCLockSourceAllowed = true;
+  safeZone = (micros() < safeZoneEndTime); //to avoid to change timing and sample just befora it was triggered
 
   //read queued encoders
-  processRotaryEncoder();
+  NEXT(queuedRotaryEncoder, MAXENCODERS);
+  uint8_t result = encoders[queuedRotaryEncoder]->process();
+  if ((result == DIR_CW) || (result == DIR_CCW))
+  {
+    int8_t encoderChange;
+    encoderChange = (result == DIR_CW) ? 1 : -1;
+    //if MOOD encoder change
+    if (queuedRotaryEncoder == MOODENCODER)
+    {
+      selectedMood += encoderChange;
+      selectedMood = constrain(selectedMood, 0, importedMoodsFromSd - 1);
+      if (lastSelectedMood != selectedMood)
+      {
+        flagUD_browseThisMood = true;
+        lastSelectedMood = selectedMood;
+      }
+    }
+    //else if CROSSFADER encoder change
+    else if (queuedRotaryEncoder == CROSSENCODER)
+    {
+      //if latency menu pressed together , change timer shift
+      if (laddderMenuOption == COMMANDLAT)
+      {
+        u_LatencyComp += encoderChange * LATENCYSTEP;
+        u_LatencyComp = constrain(u_LatencyComp, -LATENCYLIMIT, LATENCYLIMIT);
+        updateDisplayUpdateLatencyComp = true;
+      }
+      //if cross button is pressed and cross rotate CHANGE BPM
+      else if (onlyOneEncoderButtonIsPressed(ENCBUTCROSS) && (millis() > interfaceEventDebounce))
+      {
+        flagUD_newBpmValue = true;
+        bpm += encoderChange;
+        bpm = constrain(bpm, G_MINBPM, G_MAXBPM);
+        u_bpm = bpm2micros4ppqn(bpm);
+        interfaceEventDebounce = millis() + 50; //block any other interface event
+      }
+      else if (laddderMenuOption == COMMANDNUL)
+      { //or else , cross change
+        //flags to update crossfader value ONLY inside the safe zone
+        changedCrossfaderValue = crossfader + encoderChange;
+        changedCrossfaderValue = constrain(changedCrossfaderValue, 0, G_MAXINSTRUMENTS);
+        flagUD_newCrossfaderPosition = encoderChange;
+      }
+    }
+    //else INSTRUMENT encoder change
+    else
+    {
+      uint8_t _instrum = queuedRotaryEncoder - 2; //discard mood (0) and morph (1) indexes
+      //sample change
+      if (laddderMenuOption == COMMANDSMP)
+      {
+        if (encoderChange == -1)
+          flag_newPlayingSampleDirection = -G_MAXINSTRUMENTS;
+        else
+          flag_newPlayingSampleDirection = G_MAXINSTRUMENTS;
+        flagUD_newPlayingSample = _instrum;
+      }
+      //gate lenght change
+      else if (laddderMenuOption == COMMANDGTL)
+      {
+        mood[thisDeck]->patterns[_instrum]->changeGateLenghSize(encoderChange);
+        flagUD_newGateLenght = _instrum;
+      }
+      //pattern change
+      else if (noneEncoderButtonIsPressed())
+      {
+        flag_newPlayingPatternDirection = encoderChange;
+        flagUD_newPlayingPattern = _instrum; //flags to update this instrument on display
+      }
+    }
+  }
 
   //ASYNC'd updates ==============================================================
+
+  //take a while to allows external clock source
+  if ((!externalCLockSourceAllowed) && (millis() > 15000))
+    externalCLockSourceAllowed = true;
+
   //flags if any display update will be necessary in this cycle
   bool updateDisplay = false;
-  //mood browse
-  if (flagUD_browseThisMood)
-  {
-    checkDefaultDisplay();
-    displayShowBrowsedMood();
-    flagUD_browseThisMood = false;
-    updateDisplay = true;
-  }
-  //right upper corner with bpm value
-  else if (flagUD_newBpmValue)
-  {
-    flagUD_newBpmValue = false;
-    displayShowCornerInfo("BPM", bpm);
-    updateDisplay = true;
-  }
-  //cross bar changes inside sample update window
-  //this could be took off if using Tsunami
-  else if ((flagUD_newCrossfaderPosition != 0) && safeZone())
-  {
-    crossfader = flag_newCrossfaderValue;
-    checkDefaultDisplay();
-    displayShowCrossBar(crossfader);
-    flagUD_newCrossfaderPosition = 0;
-    updateDisplay = true;
-  }
-  //copy selected mood to new deck inside sample update window
-  else if (flagUD_newMoodSelected && safeZone())
-  {
-    checkDefaultDisplay();
 
-    //before load new mood, prepare current deck to leave it the same way user customized
-    // if (!flag_fromSavedMood)
-    // {
-    for (uint8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
+  if (safeZone)
+  {
+    //mood browse
+    if (flagUD_browseThisMood)
     {
-      //if this instrument belongs to the other deck
-      if (crossfadedDeck(instr) == !thisDeck)
+      checkDefaultDisplay();
+      displayShowBrowsedMood();
+      flagUD_browseThisMood = false;
+      updateDisplay = true;
+    }
+    //right upper corner with bpm value
+    else if (flagUD_newBpmValue)
+    {
+      flagUD_newBpmValue = false;
+      displayShowCornerInfo("BPM", bpm);
+      updateDisplay = true;
+    }
+    //cross bar changes inside sample update window
+    //this could be took off if using Tsunami
+    else if (flagUD_newCrossfaderPosition != 0)
+    {
+      crossfader = changedCrossfaderValue;
+      checkDefaultDisplay();
+      displayShowCrossBar(crossfader);
+      flagUD_newCrossfaderPosition = 0;
+      updateDisplay = true;
+    }
+    //copy selected mood to new deck inside sample update window
+    else if (flagUD_newMoodSelected)
+    {
+      checkDefaultDisplay();
+
+      //before load new mood, prepare current deck to leave it the same way user customized
+      // if (!flag_fromSavedMood)
+      // {
+      for (uint8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
       {
-        //if this instrument was left behind on the other deck , save it on new
-        if (crossfader <= lastCrossfadedValue)
+        //if this instrument belongs to the other deck
+        if (crossfadedDeck(instr) == !thisDeck)
         {
-          mood[thisDeck]->cueXfadedInstrument(
-              instr,
-              mood[!thisDeck]->samples[instr]->getValue(),
-              mood[!thisDeck]->patterns[instr]->patternIndex->getValue(),
-              mood[!thisDeck]->patterns[instr]->muted,
-              mood[!thisDeck]->patterns[instr]->gateLenghtSize);
+          //if this instrument was left behind on the other deck , save it on new
+          if (crossfader <= lastCrossfadedValue)
+          {
+            mood[thisDeck]->cueXfadedInstrument(
+                instr,
+                mood[!thisDeck]->samples[instr]->getValue(),
+                mood[!thisDeck]->patterns[instr]->patternIndex->getValue(),
+                mood[!thisDeck]->patterns[instr]->muted,
+                mood[!thisDeck]->patterns[instr]->gateLenghtSize);
+          }
+          else //or discard
+          {
+            mood[thisDeck]->discardNotXfadedInstrument(instr);
+          }
         }
-        else //or discard
+        lastCrossfadedValue = crossfader;
+        //  }
+      }
+      //switch decks
+      crossfader = 0;
+      thisDeck = !thisDeck;
+      mood[thisDeck]->cue(selectedMood,
+                          moodarray[selectedMood].pattern[0], //
+                          moodarray[selectedMood].pattern[1], //
+                          moodarray[selectedMood].pattern[2], //
+                          moodarray[selectedMood].pattern[3], //
+                          moodarray[selectedMood].pattern[4], //
+                          moodarray[selectedMood].pattern[5], //
+                          moodarray[selectedMood].sample[0],  //
+                          moodarray[selectedMood].sample[1],  //
+                          moodarray[selectedMood].sample[2],  //
+                          moodarray[selectedMood].sample[3],  //
+                          moodarray[selectedMood].sample[4],  //
+                          moodarray[selectedMood].sample[5]   //
+      );
+      displayUpdateLineArea(1, moodarray[previousMoodname].name);
+      displayUpdateLineArea(2, moodarray[selectedMood].name);
+      displayShowCrossBar(-1);
+      previousMoodname = selectedMood;
+      flagUD_newMoodSelected = false;
+      updateDisplay = true;
+    }
+    //if only one intrument pattern changed
+    else if (flagUD_newPlayingPattern != -1)
+    {
+      if (flag_newPlayingPatternDirection == -1)
+        displayShowCornerInfo("PAT", mood[thisDeck]->patterns[flagUD_newPlayingPattern]->patternIndex->reward());
+      else if (flag_newPlayingPatternDirection == 1)
+        displayShowCornerInfo("PAT", mood[thisDeck]->patterns[flagUD_newPlayingPattern]->patternIndex->advance());
+      flag_newPlayingPatternDirection = 0;
+      displayShowInstrPattern(flagUD_newPlayingPattern, RAM);
+      displayUpdateLineArea(3, "Custom");
+      updateDisplay = true;
+      flagUD_newPlayingPattern = -1;
+    }
+    //if sample changed and there is available time to update screen
+    else if (flagUD_newPlayingSample != -1)
+    {
+      displayShowCornerInfo("SMP", mood[thisDeck]->samples[flagUD_newPlayingSample]->safeChange(flag_newPlayingSampleDirection));
+      displayUpdateLineArea(3, moodarray[mood[thisDeck]->samples[flagUD_newPlayingSample]->getValue() / 6].name);
+      flag_newPlayingSampleDirection = 0;
+      updateDisplay = true;
+      flagUD_newPlayingSample = -1;
+    }
+    //if latency compensation changed
+    else if (updateDisplayUpdateLatencyComp)
+    {
+      displayShowCornerInfo("ms", u_LatencyComp / 1000);
+      updateDisplay = true;
+      updateDisplayUpdateLatencyComp = false;
+    }
+    //if gate lenght changed
+    else if (flagUD_newGateLenght != -1)
+    {
+      displayShowCornerInfo("LEN", (G_DEFAULTGATELENGHT + (mood[crossfadedDeck(flagUD_newGateLenght)]->patterns[flagUD_newGateLenght]->gateLenghtSize * G_EXTENDEDGATELENGHT)) / 1000);
+      updateDisplay = true;
+      flagUD_newGateLenght = -1;
+    }
+    //if erase pattern
+    else if (flagUD_eraseThisPattern != -1)
+    {
+      //clear pattern from display
+      displayEraseInstrumentPattern(flagUD_eraseThisPattern);
+      updateDisplay = true;
+      flagUD_eraseThisPattern = -1;
+    }
+    //if step was tapped
+    else if (flagUD_tapNewStep != -1)
+    {
+      //update display with new inserted step
+      displayShowInstrPattern(flagUD_tapNewStep, RAM);
+      updateDisplay = true;
+      flagUD_tapNewStep = -1;
+    }
+    //rollback tap
+    else if (flagUD_rollbackTappedStep != -1)
+    {
+      //update display with removed step
+      displayShowInstrPattern(flagUD_rollbackTappedStep, RAM);
+      updateDisplay = true;
+      flagUD_rollbackTappedStep = -1;
+    }
+    else if (flagUD_save)
+    {
+      flagUD_save = false;
+      bool targetDeck;
+      String moodName, moodString;
+      String availChars = "abcdefghijklmnopqrstuvxz";
+
+      //when saving a mood we have to save patterns first and point to then
+      //save customized and unempty pattern to file , get the its new index ,
+      //and then reference it inside the new mood
+      //or reference to 1 in case they are empty
+      //DO NOT JUMP to new mood.
+      //only saves and keep working with 2 actual loaded moods
+      DEBL("saving new mood");
+
+      //mood index
+      moodString = String(importedMoodsFromSd);
+      moodString += ",";
+
+      //set default patterns and samples
+      uint8_t virtualPatterns[G_MAXINSTRUMENTS] = {1, 1, 1, 1, 1, 1};
+      uint8_t virtualSamples[G_MAXINSTRUMENTS] = {0, 1, 2, 3, 4, 5};
+      //bool virtualSteps[G_MAXSTEPS];
+
+      //verify any custom pattern , save it before save mood
+      for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
+      {
+        bool targetDeck;
+        targetDeck = crossfadedDeck(instr);
+        //if this is a custom pattern
+        if (mood[targetDeck]->patterns[instr]->customPattern != 0)
         {
-          mood[thisDeck]->discardNotXfadedInstrument(instr);
+          //it is not muted and not empty
+          if (!mood[targetDeck]->patterns[instr]->muted &&
+              (!mood[targetDeck]->patterns[instr]->emptyPattern()))
+          {
+            //save new unempty pattern to file before reference it on new mood
+            // for (int8_t i = 0; i < G_MAXINSTRUMENTS; i++)
+            //   virtualSteps[i] = mood[targetDeck]->patterns[instr]->getStep(i);
+            uint8_t newPatternIndex = SD_dumpNewPattern(instr);
+            if (newPatternIndex != 0)
+            {
+              virtualPatterns[instr] = newPatternIndex;
+              virtualSamples[instr] = mood[targetDeck]->samples[instr]->getValue();
+              mood[targetDeck]->patterns[instr]->patternIndex->increaseEnd(1);
+              mood[!targetDeck]->patterns[instr]->patternIndex->increaseEnd(1);
+              flagUD_error = false;
+            }
+            else
+            {
+              //error to save pattern into file
+              flagUD_error = true;
+            }
+          }
+        }
+        else
+        {
+          //get actual data
+          virtualPatterns[instr] = mood[targetDeck]->patterns[instr]->patternIndex->getValue();
+          virtualSamples[instr] = mood[targetDeck]->samples[instr]->getValue();
         }
       }
-      lastCrossfadedValue = crossfader;
-      //  }
+
+      if (!flagUD_error)
+      { //random mood name
+        randomSeed(micros());
+        moodName = "";
+        for (uint8_t i = 0; i < 7; i++)
+        {
+          uint8_t randomchar = random(0, 1000) % 25;
+          moodName += availChars.substring(randomchar, randomchar + 1);
+        }
+        moodString += String(moodName);
+        moodString += ",";
+        //update RAM mood array
+        moodName.toCharArray(moodarray[importedMoodsFromSd].name, moodName.length());
+        //for each pattern
+        for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
+        {
+          bool targetDeck;
+          targetDeck = crossfadedDeck(instr);
+          //update RAM with virtual created mood data
+          moodarray[importedMoodsFromSd].pattern[instr] = virtualPatterns[instr];
+          moodarray[importedMoodsFromSd].sample[instr] = virtualSamples[instr];
+        }
+        //dump RAM record to txt
+        SD_dumpNewMood(importedMoodsFromSd, moodName,                                                                                                                                                                                                                                    //
+                       moodarray[importedMoodsFromSd].pattern[0], moodarray[importedMoodsFromSd].pattern[1], moodarray[importedMoodsFromSd].pattern[2], moodarray[importedMoodsFromSd].pattern[3], moodarray[importedMoodsFromSd].pattern[4], moodarray[importedMoodsFromSd].pattern[5], //
+                       moodarray[importedMoodsFromSd].sample[0], moodarray[importedMoodsFromSd].sample[1], moodarray[importedMoodsFromSd].sample[2], moodarray[importedMoodsFromSd].sample[3], moodarray[importedMoodsFromSd].sample[4], moodarray[importedMoodsFromSd].sample[5]);      //
+        importedMoodsFromSd++;
+        displayShowCornerInfo("SAV");
+      }
+      if (flagUD_error)
+      {
+        flagUD_error = false;
+        displayShowCornerInfo("ERR");
+      }
+      updateDisplay = true;
     }
-    //switch decks
-    crossfader = 0;
-    thisDeck = !thisDeck;
-    mood[thisDeck]->cue(selectedMood,
-                        moodarray[selectedMood].pattern[0], //
-                        moodarray[selectedMood].pattern[1], //
-                        moodarray[selectedMood].pattern[2], //
-                        moodarray[selectedMood].pattern[3], //
-                        moodarray[selectedMood].pattern[4], //
-                        moodarray[selectedMood].pattern[5], //
-                        moodarray[selectedMood].sample[0],  //
-                        moodarray[selectedMood].sample[1],  //
-                        moodarray[selectedMood].sample[2],  //
-                        moodarray[selectedMood].sample[3],  //
-                        moodarray[selectedMood].sample[4],  //
-                        moodarray[selectedMood].sample[5]   //
-    );
-    displayUpdateLineArea(1, moodarray[previousMoodname].name);
-    displayUpdateLineArea(2, moodarray[selectedMood].name);
-    displayShowCrossBar(-1);
-    previousMoodname = selectedMood;
-    flagUD_newMoodSelected = false;
-    updateDisplay = true;
-  }
-  //if only one intrument pattern changed
-  else if (flagUD_newPlayingPattern != -1)
-  {
-    displayShowInstrPattern(flagUD_newPlayingPattern, RAM);
-    displayUpdateLineArea(3, "Custom");
-    displayShowCornerInfo("PAT", mood[thisDeck]->patterns[flagUD_newPlayingPattern]->patternIndex->getValue());
-    updateDisplay = true;
-    flagUD_newPlayingPattern = -1;
-  }
-  //if sampler changed and there is available time to update screen
-  else if ((flagUD_newPlayingSample != -1) && safeZone())
-  {
-    displayUpdateLineArea(3, moodarray[mood[thisDeck]->samples[flagUD_newPlayingSample]->getValue() / 6].name);
-    displayShowCornerInfo("SMP", mood[thisDeck]->samples[flagUD_newPlayingSample]->getValue());
-    updateDisplay = true;
-    flagUD_newPlayingSample = -1;
-  }
-  //if latency compensation changed
-  else if (updateDisplayUpdateLatencyComp)
-  {
-    displayShowCornerInfo("ms", (u_LatencyComp - 100) / 1000);
-    updateDisplay = true;
-    updateDisplayUpdateLatencyComp = false;
-  }
-  //if gate lenght changed
-  else if (flagUD_newGateLenght != -1)
-  {
-    displayShowCornerInfo("LEN", (G_DEFAULTGATELENGHT + (mood[crossfadedDeck(flagUD_newGateLenght)]->patterns[flagUD_newGateLenght]->gateLenghtSize * G_EXTENDEDGATELENGHT)) / 1000);
-    updateDisplay = true;
-    flagUD_newGateLenght = -1;
-  }
-  //if erase pattern
-  else if (flagUD_eraseThisPattern != -1)
-  {
-    //clear pattern from display
-    displayEraseInstrumentPattern(flagUD_eraseThisPattern);
-    updateDisplay = true;
-    flagUD_eraseThisPattern = -1;
-  }
-  //if step was tapped
-  else if (flagUD_tapNewStep != -1)
-  {
-    //update display with new inserted step
-    displayShowInstrPattern(flagUD_tapNewStep, RAM);
-    updateDisplay = true;
-    flagUD_tapNewStep = -1;
-  }
-  //rollback tap
-  else if (flagUD_rollbackTappedStep != -1)
-  {
-    //update display with removed step
-    displayShowInstrPattern(flagUD_rollbackTappedStep, RAM);
-    updateDisplay = true;
-    flagUD_rollbackTappedStep = -1;
   }
   //change clock source
   else if (flagUD_newClockSource)
@@ -721,112 +838,18 @@ void loop()
     flagUD_newClockSource = false;
     if (internalClockSource)
     {
-      detachInterrupt(digitalPinToInterrupt(TRIGGERINPIN));
-      attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRidentifyExtClockSource, FALLING);
-      Timer3.attachInterrupt(ISRbaseTimer);
+      detachInterrupt(digitalPinToInterrupt(TRIGGERINPIN));                                     //dettach ISRtickTimer
+      attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRidentifyExtClockSource, FALLING); //attach new proc ISRidentifyExtClockSource
+      Timer3.attachInterrupt(ISRtickTimer);
       Timer3.start(u_bpm);
     }
-    else
+    else //external clock source
     {
       Timer3.stop();
       Timer3.detachInterrupt();
-      attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRbaseTimer, FALLING);
+      attachInterrupt(digitalPinToInterrupt(TRIGGERINPIN), ISRtickTimer, FALLING);
     }
     displayShowCornerInfo((internalClockSource) ? "INT" : "EXT");
-    updateDisplay = true;
-  }
-  else if (flagUD_save)
-  {
-    flagUD_save = false;
-    bool targetDeck;
-    String moodName, moodString;
-    String availChars = "abcdefghijklmnopqrstuvxz";
-
-    //when saving a mood we have to save patterns first and point to then
-    //save customized and unempty pattern to file , get the its new index ,
-    //and then reference it inside the new mood
-    //or reference to 1 in case they are empty
-    //DO NOT JUMP to new mood.
-    //only saves and keep working with 2 actual loaded moods
-    DEBL("saving new mood");
-
-    //mood index
-    moodString = String(importedMoodsFromSd);
-    moodString += ",";
-
-    //set default patterns and samples
-    uint8_t virtualPatterns[G_MAXINSTRUMENTS] = {1, 1, 1, 1, 1, 1};
-    uint8_t virtualSamples[G_MAXINSTRUMENTS] = {0, 1, 2, 3, 4, 5};
-    //bool virtualSteps[G_MAXSTEPS];
-
-    //verify any custom pattern , save it before save mood
-    for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
-    {
-      bool targetDeck;
-      targetDeck = crossfadedDeck(instr);
-      //if this is a custom pattern
-      if (mood[targetDeck]->patterns[instr]->customPattern != 0)
-      {
-        //it is not muted and not empty
-        if (!mood[targetDeck]->patterns[instr]->muted &&
-            (!mood[targetDeck]->patterns[instr]->emptyPattern()))
-        {
-          //save new unempty pattern to file before reference it on new mood
-          // for (int8_t i = 0; i < G_MAXINSTRUMENTS; i++)
-          //   virtualSteps[i] = mood[targetDeck]->patterns[instr]->getStep(i);
-          uint8_t newPatternIndex = SD_dumpNewPattern(instr);
-          if (newPatternIndex != 0)
-          {
-            virtualPatterns[instr] = newPatternIndex;
-            virtualSamples[instr] = mood[targetDeck]->samples[instr]->getValue();
-            mood[targetDeck]->patterns[instr]->patternIndex->increaseEnd(1);
-            mood[!targetDeck]->patterns[instr]->patternIndex->increaseEnd(1);
-            flagUD_error = false;
-          }
-          else
-          {
-            //error to save pattern into file
-            flagUD_error = true;
-          }
-        }
-      }
-      else
-      {
-        //get actual data
-        virtualPatterns[instr] = mood[targetDeck]->patterns[instr]->patternIndex->getValue();
-        virtualSamples[instr] = mood[targetDeck]->samples[instr]->getValue();
-      }
-    }
-
-    if (!flagUD_error)
-    { //random mood name
-      randomSeed(micros());
-      moodName = "";
-      for (uint8_t i = 0; i < 7; i++)
-      {
-        uint8_t randomchar = random(0, 1000) % 25;
-        moodName += availChars.substring(randomchar, randomchar + 1);
-      }
-      moodString += String(moodName);
-      moodString += ",";
-      //update RAM mood array
-      moodName.toCharArray(moodarray[importedMoodsFromSd].name, moodName.length());
-      //for each pattern
-      for (int8_t instr = 0; instr < G_MAXINSTRUMENTS; instr++)
-      {
-        bool targetDeck;
-        targetDeck = crossfadedDeck(instr);
-        //update RAM with virtual created mood data
-        moodarray[importedMoodsFromSd].pattern[instr] = virtualPatterns[instr];
-        moodarray[importedMoodsFromSd].sample[instr] = virtualSamples[instr];
-      }
-      //dump RAM record to txt
-      SD_dumpNewMood(importedMoodsFromSd, moodName,                                                                                                                                                                                                                                    //
-                     moodarray[importedMoodsFromSd].pattern[0], moodarray[importedMoodsFromSd].pattern[1], moodarray[importedMoodsFromSd].pattern[2], moodarray[importedMoodsFromSd].pattern[3], moodarray[importedMoodsFromSd].pattern[4], moodarray[importedMoodsFromSd].pattern[5], //
-                     moodarray[importedMoodsFromSd].sample[0], moodarray[importedMoodsFromSd].sample[1], moodarray[importedMoodsFromSd].sample[2], moodarray[importedMoodsFromSd].sample[3], moodarray[importedMoodsFromSd].sample[4], moodarray[importedMoodsFromSd].sample[5]);      //
-      importedMoodsFromSd++;
-      displayShowCornerInfo("SAV");
-    }
     updateDisplay = true;
   }
   else if (muteAllChannels)
@@ -837,18 +860,12 @@ void loop()
     mood[!thisDeck]->setMuteAllInstruments(allChannelsMuteState);
   }
 
-  if (flagUD_error)
-  {
-    flagUD_error = false;
-    displayShowCornerInfo("ERR");
-  }
-
   //if any display update
-  if (updateDisplay)
+  if ((updateDisplay) && safeZone)
     display.display();
 
-  //SYNCd updates ==============================================================
-  if ((millis() > interfaceEventDebounce))
+  //not display related commands  (fast to execute anytime) =======================================
+  if (millis() > interfaceEventDebounce)
   {
     //read all encoders buttons (invert bool state to make it easyer for compararison)
     for (int8_t i = 0; i < MAXENCODERS; i++)
@@ -869,7 +886,7 @@ void loop()
     if ((laddderMenuOption == COMMANDNUL) && encoderButtonState[3])
     {
       muteAllChannels = true;
-      interfaceEventDebounce = millis() + 500;
+      interfaceEventDebounce = millis() + 350;
     }
     //save this mood
     if ((laddderMenuOption == COMMANDNUL) && (encoderButtonState[6] && encoderButtonState[7]))
@@ -879,7 +896,7 @@ void loop()
     }
   }
 
-  //if new mood was selected....copy reference tables or create new mood in the cross area
+  //new mood selected....copy reference tables or create new mood in the cross area
   if (onlyOneEncoderButtonIsPressed(ENCBUTMOOD) && (millis() > interfaceEventDebounce))
   {
     interfaceEventDebounce = millis() + 1000; //block any other interface event
@@ -966,6 +983,7 @@ void loop()
         instrActionDebounce[i] = millis() + makeDebounce;
     }
   }
+
   //long interval between readings from action ladder menu
   if (millis() > laddderMenuReadDebounce)
   {
@@ -973,8 +991,8 @@ void loop()
     laddderMenuReadDebounce = millis() + 100;
   }
 
-  //2 seconds without external trigger , becomes internal timer
-  if (!internalClockSource & (micros() > (u_lastTick + 2000000)))
+  //1 second without external trigger , becomes internal timer
+  if (!internalClockSource & (micros() > (u_lastTick + 1000000)))
   {
     flagUD_newClockSource = true;
     internalClockSource = true;

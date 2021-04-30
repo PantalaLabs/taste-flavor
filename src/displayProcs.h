@@ -29,14 +29,6 @@ void checkDefaultDisplay()
   }
 }
 
-void displayWelcome()
-{
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println(F("<-- mood"));
-  display.println(F("           cross -->"));
-}
-
 void displayShowCrossBar(int8_t _size) //update crossing status / 6 steps of 10 pixels each
 {
   if (lastCrossBarGraphValue != _size)
@@ -55,7 +47,7 @@ void displayShowCornerInfo(String _str) //update display right upper corner with
   display.print(_str);
 }
 
-void displayShowCornerInfo(String _str, uint16_t _val) //update display right upper corner with the actual sample or pattern number
+void displayShowCornerInfo(String _str, int16_t _val) //update display right upper corner with the actual sample or pattern number
 {
   displayShowCornerInfo(_str);
   // display.fillRect(70, 0, DISPLAY_WIDTH - 70, TEXTLINE_HEIGHT, BLACK);

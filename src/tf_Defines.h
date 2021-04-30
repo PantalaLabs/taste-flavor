@@ -15,17 +15,16 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define MOODENCODER 0  //MOOD encoder id
 #define CROSSENCODER 1 //CROSS encoder id
 
-#define RAM 0              //BKP pattern
-#define ROM 1              //mute pattern
-#define G_MAXINSTRUMENTS 6 //total of instruments
-#define G_MAXSTEPS 64      //max step sequence
-#define G_BLOCKBITS 32     //number os bits of each pattern bitblock
-//#define G_MAXBLOCKS 8              //number os blobks of each pattern
+#define RAM 0                      //BKP pattern
+#define ROM 1                      //mute pattern
+#define G_MAXINSTRUMENTS 6         //total of instruments
+#define G_MAXSTEPS 64              //max step sequence
+#define G_BLOCKBITS 32             //number os bits of each pattern bitblock
 #define G_MAXGATELENGHTS 12        //max number of different gatelenghts
-#define G_DEFAULTGATELENGHT 5000   //first gatelenght in ms
+#define G_DEFAULTGATELENGHT 10000  //first gatelenght in ms
 #define G_EXTENDEDGATELENGHT 20000 //gate lenght size increment
-
-#define G_MAXMEMORYMOODS 300 //max number of moods
+#define LOADSAMPLETIME 45000       //microsseconds to update display
+#define G_MAXMEMORYMOODS 300       //max number of moods
 #define G_MAXBPM 160
 #define G_MINBPM 60
 
@@ -47,5 +46,8 @@ under a Creative Commons Attribution-ShareAlike 4.0 International License.
 #define COMMANDLAT 7
 #define COMMANDSOL 8
 #define COMMANDNUL 9
+
+#define LATENCYSTEP 1020   //latency compensation amount to fire samples
+#define LATENCYLIMIT 20000 //latency compensation + and - limit
 
 #endif
